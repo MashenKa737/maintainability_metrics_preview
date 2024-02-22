@@ -1,21 +1,48 @@
 import json
 import matplotlib.pyplot as plt
+import numpy as np
 
 
-def make_bar(fig, values: list, labels: list, title: str, xlabel: str, ylabel: str):
+def make_bar(fig, values, labels: list, title: str, xlabel: str, ylabel: str):
+    make_stacked_bars(
+        fig,
+        labels=labels,
+        values=(values,),
+        categories=("",),
+        title=title,
+        xlabel=xlabel,
+        ylabel=ylabel
+    )
+
+
+def make_stacked_bars(
+        fig,
+        labels: list,
+        values: tuple,
+        categories: tuple,
+        title: str,
+        xlabel: str,
+        ylabel: str
+):
     plt.title(title)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.grid()
     plt.xticks(visible=False)  # don't show x labels to avoid overlap
-
-    plt_bar = plt.bar(
-        x=labels,
-        height=values,
-        align='edge',
-        picker=True  # show bar annotation on the pick event
-    )
-
+    plt_bars = []
+    bottom = np.zeros(len(labels))
+    for bar_values, category in zip(values, categories):
+        plt_bars.append(
+            plt.bar(
+                x=labels,
+                height=bar_values,
+                align='edge',
+                picker=True,  # show bar annotation on the pick event
+                label=category,
+                bottom=bottom
+            )
+        )
+        bottom += np.array(bar_values)
     plt_labels = []
 
     text_kwargs = dict(
@@ -26,7 +53,7 @@ def make_bar(fig, values: list, labels: list, title: str, xlabel: str, ylabel: s
         bbox=dict(facecolor='white', alpha=0.8),
         visible=False  # all annotations are hidden until being picked
     )
-    for index, rect in enumerate(plt_bar.patches):
+    for index, rect in enumerate(plt_bars[-1].patches):
         text = plt.annotate(
             labels[index],
             xy=(rect.get_x(), rect.get_y() + rect.get_height()),
@@ -38,7 +65,7 @@ def make_bar(fig, values: list, labels: list, title: str, xlabel: str, ylabel: s
         )
         plt_labels.append(text)
 
-    visible_labels = []  # only one annotation supposed to be shown
+    visible_labels = []
 
     def on_pick(event):
         bar = event.artist
@@ -48,7 +75,8 @@ def make_bar(fig, values: list, labels: list, title: str, xlabel: str, ylabel: s
                 visible_label.set_visible(False)  # hide all annotations
             visible_labels.clear()
 
-            bar_index = plt_bar.index(bar)
+            picked_bar = next(b for b in plt_bars if bar in b.patches)
+            bar_index = picked_bar.index(bar)
             print(labels[bar_index])
             plt_labels[bar_index].set_visible(True)  # show annotation for the selected bar
             visible_labels.append(plt_labels[bar_index])
@@ -132,6 +160,56 @@ def hal_parser(data: dict):
     )
     plt.show()
 
+
+def raw_parser(data: dict):
+    loc = []
+    lloc = []
+    sloc = []
+    comments = []
+    oneline_strings = []
+    multiline_strings = []
+    blank = []
+
+    files = list(data.keys())
+    labels = []
+
+    for filename in files:
+        entity = data[filename]
+        loc.append(entity["loc"])
+        lloc.append(entity["lloc"])
+        sloc.append(entity["sloc"])
+        comments.append(entity["comments"])
+        oneline_strings.append(entity["single_comments"])
+        multiline_strings.append(entity["multi"])
+        blank.append(entity["blank"])
+        labels.append(
+            f"filename: {filename}\n" +
+            "\n".join([f'{key}: {value}' for key, value in entity.items()])
+        )
+
+    fig = plt.figure('Statistics', figsize=(10, 5), frameon=True, layout="constrained")
+    make_stacked_bars(
+        fig,
+        values=(sloc, oneline_strings, multiline_strings, blank),
+        labels=labels,
+        categories=("SLOC", "oneline docstrings", "multiline docstrings", "blank"),
+        title="Raw",
+        xlabel="files",
+        ylabel="lines of code"
+    )
+    plt.legend()
+    plt.show()
+
+    fig = plt.figure('Statistics', figsize=(10, 5), frameon=True, layout="constrained")
+    plt.subplot(2, 1, 1)
+    make_bar(fig, labels=labels, values=lloc, title="Logical lines of code", xlabel="files", ylabel="lines of code")
+    plt.subplot(2, 1, 2)
+    make_bar(fig, labels=labels, values=comments, title="Comments", xlabel="files", ylabel="lines of code")
+    plt.show()
+
+
+with open("raw_results.json", "r") as f:
+    raw_parser(json.loads(f.read()))
 
 with open("cc_results.json", "r") as f:
     cc_parser(json.loads(f.read()))
