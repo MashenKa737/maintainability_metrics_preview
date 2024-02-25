@@ -101,12 +101,20 @@ def make_plot_description(text: str):
     )
 
 
+def save_or_show(save: bool, filename: str):
+    if save:
+        plt.savefig(filename)
+        plt.close()
+    else:
+        plt.show()
+
+
 def sort(values: list, labels: list):
     values_and_labels = sorted(zip(values, labels), reverse=True)
     return zip(*values_and_labels)
 
 
-def cc_parser(data: dict):
+def cc_parser(data: dict, save=False):
     complexities = []
     cc_info = []
     for filename in data.keys():
@@ -129,10 +137,10 @@ def cc_parser(data: dict):
         ylabel="Complexity"
     )
     make_plot_description(f"Total blocks count: {len(cc_info)}")
-    plt.show()
+    save_or_show(save, 'cc.png')
 
 
-def hal_parser(data: dict):
+def hal_parser(data: dict, save=False):
     difficulties_files = []
     summaries_files = []
     difficulties_funcs = []
@@ -178,10 +186,10 @@ def hal_parser(data: dict):
     )
     make_plot_description(f"Total functions count: {len(difficulties_funcs)}\n"
                           f"Nonzero halstead metric in {np.count_nonzero(difficulties_funcs)} functions")
-    plt.show()
+    save_or_show(save, 'Halstead.png')
 
 
-def raw_parser(data: dict):
+def raw_parser(data: dict, save=False):
     loc = []
     lloc = []
     sloc = []
@@ -224,7 +232,7 @@ def raw_parser(data: dict):
                           f"Oneline comments and docstrings: {sum(oneline_strings)}\n"
                           f"Multiline docstrings: {sum(multiline_strings)}\n"
                           f"Blank: {sum(blank)}")
-    plt.show()
+    save_or_show(save, 'raw_statistics.png')
 
     fig = plt.figure('Statistics', figsize=(10, 5), frameon=True, layout="constrained")
     plt.subplot(2, 1, 1)
@@ -234,29 +242,31 @@ def raw_parser(data: dict):
     plt.subplot(2, 1, 2)
     make_bar(fig, labels=labels, values=comments, title="Comments", xlabel="files", ylabel="lines of code")
     make_plot_description(f"Total files count: {len(files)}\n"
-                          f"Comments: {sum(comments)}")
-    plt.show()
+                          f"Comments: {sum(comments)}\n")
+    save_or_show(save, 'raw_LLOC_Comments.png')
 
 
-def mi_parser(data: dict):
+def mi_parser(data: dict, save=False):
     descriptions, mi = zip(*[(f"file: {k}\nmi: {v['mi']}%", v["mi"]) for k, v in data.items()])
     inverted_mi = np.array(mi) - 100
-    fig = plt.figure('Maintainability index', figsize=(10, 5), frameon=True, layout="constrained")
+    fig = plt.figure('Maintainability index', figsize=(10, 4), frameon=True, layout="constrained")
     make_bar(fig, values=inverted_mi, labels=descriptions, title="MI", xlabel="files", ylabel="Percentage", bottom=100.0)
     plot_description = (f"Total files count: {len(descriptions)}\n" 
                         f"MI≠100% in {np.count_nonzero(inverted_mi)} files")
     make_plot_description(plot_description)
-    plt.show()
+    save_or_show(save, 'mi.png')
 
+
+save_chart = False
 
 with open("raw_results.json", "r") as f:
-    raw_parser(json.loads(f.read()))
+    raw_parser(json.loads(f.read()), save=save_chart)
 
 with open("cc_results.json", "r") as f:
-    cc_parser(json.loads(f.read()))
+    cc_parser(json.loads(f.read()), save=save_chart)
 
 with open("hal_results.json", "r") as f:
-    hal_parser(json.loads(f.read()))
+    hal_parser(json.loads(f.read()), save=save_chart)
 
 with open("mi_results.json", "r") as f:
-    mi_parser(json.loads(f.read()))
+    mi_parser(json.loads(f.read()), save=save_chart)
