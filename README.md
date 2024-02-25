@@ -11,6 +11,7 @@ run in current folder:
 radon cc <path to analyzed project src> -j > cc_results.json
 radon hal <path to analyzed project src> -j > hal_results.json
 radon raw <path to analyzed project src> -j > raw_results.json
+radon mi <path to analyzed project src> -j > mi_results.json
 ```
 
 run script
