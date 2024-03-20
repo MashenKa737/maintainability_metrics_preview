@@ -6,7 +6,7 @@ import numpy as np
 
 
 def make_bar(
-    fig, values, labels: list, title: str, xlabel: str, ylabel: str, bottom=0.0
+    fig, values: list, labels: list, title: str, xlabel: str, ylabel: str, bottom=0.0
 ):
     make_stacked_bars(
         fig,
@@ -17,6 +17,7 @@ def make_bar(
         xlabel=xlabel,
         ylabel=ylabel,
         bottom=bottom,
+        show_first=True,
     )
 
 
@@ -29,6 +30,7 @@ def make_stacked_bars(
     xlabel: str,
     ylabel: str,
     bottom=0.0,
+    show_first=True,
 ):
     plt.title(title)
     plt.xlabel(xlabel)
@@ -63,7 +65,7 @@ def make_stacked_bars(
         text = plt.annotate(
             labels[index],
             xy=(rect.get_x(), rect.get_y() + rect.get_height()),
-            xytext=(50, -50),
+            xytext=(50, -np.copysign(50, rect.get_height())),
             textcoords="offset pixels",
             arrowprops=dict(arrowstyle="->"),
             annotation_clip=True,
@@ -72,6 +74,10 @@ def make_stacked_bars(
         plt_labels.append(text)
 
     visible_labels = []
+
+    if show_first:
+        plt_labels[0].set_visible(True)
+        visible_labels.append(plt_labels[0])
 
     def on_pick(event):
         bar = event.artist
@@ -115,8 +121,8 @@ def save_or_show(save_output: str, filename: str):
         plt.show()
 
 
-def sort(values: list, labels: list):
-    values_and_labels = sorted(zip(values, labels), reverse=True)
+def sort(values: list, labels: list, reverse=True):
+    values_and_labels = sorted(zip(values, labels), reverse=reverse)
     return zip(*values_and_labels)
 
 
@@ -148,6 +154,62 @@ def cc_parser(data: dict, save_output: str = None):
     save_or_show(save_output, "cc.png")
 
 
+def cc_parser_distinct(data: dict, save_output: str = None):
+    complexities_funcs = []
+    cc_info_funcs = []
+
+    complexities_classes = []
+    cc_info_classes = []
+
+    for filename in data.keys():
+        for entity in data[filename]:
+            complexities, cc_info = (
+                (complexities_classes, cc_info_classes)
+                if entity["type"] == "class"
+                else (complexities_funcs, cc_info_funcs)
+            )
+
+            complexities.append(entity["complexity"])
+            cc_info.append(
+                f'name: {entity["name"]}\n'
+                f'type: {entity["type"]}\n'
+                f'rank: {entity["rank"]}\n'
+                f'complexity: {entity["complexity"]}\n'
+                f"filename: {filename}"
+            )
+    complexities_funcs, cc_info_funcs = sort(complexities_funcs, cc_info_funcs)
+    complexities_classes, cc_info_classes = sort(complexities_classes, cc_info_classes)
+
+    fig = plt.figure(
+        "Cyclomatic complexity",
+        figsize=(10, 5),
+        frameon=True,
+        layout="constrained",
+    )
+    plt.subplot(2, 1, 1)
+    make_bar(
+        fig,
+        values=complexities_funcs,
+        labels=cc_info_funcs,
+        title="Cyclomatic complexity per function",
+        xlabel="Functions",
+        ylabel="Complexity",
+    )
+    make_plot_description(f"Total blocks count: {len(cc_info_funcs)}")
+
+    plt.subplot(2, 1, 2)
+    make_bar(
+        fig,
+        values=complexities_classes,
+        labels=cc_info_classes,
+        title="Cyclomatic complexity per class",
+        xlabel="Classes",
+        ylabel="Complexity",
+    )
+    make_plot_description(f"Total blocks count: {len(cc_info_classes)}")
+    save_or_show(save_output, "cc_distinct.png")
+
+
 def hal_parser(data: dict, save_output: str = None):
     difficulties_files = []
     summaries_files = []
@@ -171,8 +233,11 @@ def hal_parser(data: dict, save_output: str = None):
                 + "\n".join([f"{key}: {value}" for key, value in entry.items()])
             )
 
+    difficulties_files, summaries_files = sort(difficulties_files, summaries_files)
+    difficulties_funcs, summaries_funcs = sort(difficulties_funcs, summaries_funcs)
+
     fig = plt.figure(
-        "Halstead metric", figsize=(10, 5), frameon=True, layout="constrained"
+        "Halstead metric", figsize=(10, 8), frameon=True, layout="constrained"
     )
     plt.subplot(2, 1, 1)
     make_bar(
@@ -204,36 +269,37 @@ def hal_parser(data: dict, save_output: str = None):
 
 
 def raw_parser(data: dict, save_output: str = None):
-    loc = []
+    first_chart_keys = ["loc", "sloc", "single_comments", "multi", "blank"]
+    first_chart_values = []
+
     lloc = []
-    sloc = []
+    lloc_labels = []
+
     comments = []
-    oneline_strings = []
-    multiline_strings = []
-    blank = []
+    comments_labels = []
 
     files = list(data.keys())
-    labels = []
 
     for filename in files:
         entity = data[filename]
-        loc.append(entity["loc"])
-        lloc.append(entity["lloc"])
-        sloc.append(entity["sloc"])
-        comments.append(entity["comments"])
-        oneline_strings.append(entity["single_comments"])
-        multiline_strings.append(entity["multi"])
-        blank.append(entity["blank"])
-        labels.append(
-            f"filename: {filename}\n"
-            + "\n".join([f"{key}: {value}" for key, value in entity.items()])
-        )
+        label = f"filename: {filename}\n" + "\n".join([f"{key}: {value}" for key, value in entity.items()])
+        first_chart_values.append(tuple(entity[k] for k in first_chart_keys)+(label,))
+        lloc.append(entity['lloc'])
+        lloc_labels.append(label)
+        comments.append(entity['comments'])
+        comments_labels.append(label)
+
+    first_chart_values = sorted(first_chart_values, reverse=True)
+    loc, sloc, oneline_strings, multiline_strings, blank, first_chart_labels = zip(*first_chart_values)
+
+    lloc, lloc_labels = sort(lloc, lloc_labels)
+    comments, comments_labels = sort(comments, comments_labels)
 
     fig = plt.figure("Statistics", figsize=(10, 5), frameon=True, layout="constrained")
     make_stacked_bars(
         fig,
         values=(sloc, oneline_strings, multiline_strings, blank),
-        labels=labels,
+        labels=first_chart_labels,
         categories=(
             "SLOC",
             "oneline comments and docstrings",
@@ -259,7 +325,7 @@ def raw_parser(data: dict, save_output: str = None):
     plt.subplot(2, 1, 1)
     make_bar(
         fig,
-        labels=labels,
+        labels=lloc_labels,
         values=lloc,
         title="Logical lines of code",
         xlabel="files",
@@ -269,7 +335,7 @@ def raw_parser(data: dict, save_output: str = None):
     plt.subplot(2, 1, 2)
     make_bar(
         fig,
-        labels=labels,
+        labels=comments_labels,
         values=comments,
         title="Comments",
         xlabel="files",
@@ -304,3 +370,136 @@ def mi_parser(data: dict, save_output: str = None):
     )
     make_plot_description(plot_description)
     save_or_show(save_output, "mi.png")
+
+
+def mm_cc_parser(data: dict, save_output: str = None):
+    data = data["files"]
+    cc_labels, cc_values = multimetric_parse_metric(
+        "cyclomatic_complexity", "complexity", data, sort_order="descending"
+    )
+    cc_values, cc_labels = sort(cc_values, cc_labels)
+
+    make_bar(
+        plt.figure(
+            "Cyclomatic complexity", figsize=(12, 3), frameon=True, layout="constrained"
+        ),
+        values=cc_values,
+        labels=cc_labels,
+        title="Multimetric Cyclomatic Complexity",
+        xlabel="Files",
+        ylabel="Complexity",
+    )
+    save_or_show(save_output, "mm_cc.png")
+
+
+def mm_hal_parser(data: dict, save_output: str = None):
+    hal_labels, hal_values = multimetric_parse_hal(data["files"])
+    fig = plt.figure(
+        "Halstead metric", figsize=(10, 5), frameon=True, layout="constrained"
+    )
+    make_bar(
+        fig,
+        hal_values,
+        hal_labels,
+        title="Multimetric Halstead metric",
+        xlabel="Files",
+        ylabel="Difficulty",
+    )
+    save_or_show(save_output, "mm_Halstead.png")
+
+
+def mm_raw_parser(data: dict, save_output: str = None):
+    data = data["files"]
+    loc_labels, loc_values = multimetric_parse_metric(
+        "loc", "LOC", data, sort_order="descending"
+    )
+    fig = plt.figure("Statistics", figsize=(10, 5), frameon=True, layout="constrained")
+    plt.subplot(2, 1, 1)
+    make_bar(
+        fig,
+        labels=loc_labels,
+        values=loc_values,
+        title="Multimetric Lines Of Code",
+        xlabel="Files",
+        ylabel="Lines of code",
+    )
+    comments_labels, comments_values = multimetric_parse_metric(
+        "comment_ratio", "comment ratio", data, sort_order="descending"
+    )
+    plt.subplot(2, 1, 2)
+    make_bar(
+        fig,
+        labels=comments_labels,
+        values=comments_values,
+        title="Multimetric Comments",
+        xlabel="Files",
+        ylabel="Percentage",
+    )
+    save_or_show(save_output, "mm_raw.png")
+
+
+def mm_mi_parser(data: dict, save_output: str = None):
+    data = data["files"]
+    mi_labels, mi_values = multimetric_parse_metric(
+        "maintainability_index", "MI", data, sort_order="ascending"
+    )
+    inverted_mi = np.array(mi_values) - 171.0
+    fig = plt.figure(
+        "Maintainability index", figsize=(10, 4), frameon=True, layout="constrained"
+    )
+    make_bar(
+        fig,
+        values=inverted_mi,
+        labels=mi_labels,
+        title="Multimetric MI",
+        xlabel="files",
+        ylabel="Points",
+        bottom=171.0,
+    )
+    save_or_show(save_output, "mm_mi.png")
+
+
+def multimetric_parse_hal(data: dict) -> (list, list):
+    hal_difficulty_label = "halstead_difficulty"
+    hal_labels = [
+        "operands_sum",
+        "operands_uniq",
+        "operators_sum",
+        "operators_uniq",
+        "halstead_bugprop",
+        hal_difficulty_label,
+        "halstead_effort",
+        "halstead_timerequired",
+        "halstead_volume",
+    ]
+    labels = []
+    values = []
+    for file, entity in data.items():
+        if not entity:
+            continue
+        labels.append(
+            f"file: {file}\n" + "\n".join([f"{k}:{entity[k]}" for k in hal_labels])
+        )
+        values.append(entity[hal_difficulty_label])
+
+    values, labels = sort(values, labels)
+    return labels, values
+
+
+def multimetric_parse_metric(
+    metric: str, label: str, data: dict, sort_order=None
+) -> (list, list):
+    labels = []
+    values = []
+    for file, entity in data.items():
+        if not entity:
+            continue
+        metric_value = entity[metric]
+        labels.append(f"file: {file}\n{label}: {metric_value}")
+        values.append(metric_value)
+    if sort_order == "ascending":
+        values, labels = sort(values, labels, reverse=False)
+    elif sort_order == "descending":
+        values, labels = sort(values, labels, reverse=True)
+
+    return labels, values
