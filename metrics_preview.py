@@ -39,15 +39,18 @@ def setup_arguments():
     radon_name = "radon"
     radon_parser = subparsers.add_parser(radon_name)
     radon_commands = {"cc", "hal", "raw", "mi"}
-    radon_parser.add_argument(
-        "--commands", "-c", choices=radon_commands, nargs="+", default=radon_commands
-    )
+    radon_parser.add_argument("--commands", "-c", choices=radon_commands, nargs="+", default=radon_commands)
 
     mm_name = "multimetric"
     mm_parser = subparsers.add_parser(mm_name)
     mm_commands = {"cc", "hal", "raw", "mi"}
-    mm_parser.add_argument(
-        "--commands", "-c", choices=mm_commands, nargs="+", default=mm_commands
+    mm_parser.add_argument("--commands", "-c", choices=mm_commands, nargs="+", default=mm_commands)
+
+    flake8_name = "flake8"
+    flake8_parser = subparsers.add_parser(flake8_name)
+    flake8_commands = {"mccabe", "cognitive"}
+    flake8_parser.add_argument(
+        "--commands", "-c", choices=flake8_commands, nargs="+", default=flake8_commands
     )
 
     p_args = parser.parse_args()
@@ -58,13 +61,12 @@ def setup_arguments():
     else:
         p_args.output_folder = current_path
         if p_args.project_name:
-            p_args.output_folder = os.path.join(
-                p_args.output_folder, p_args.project_name
-            )
+            p_args.output_folder = os.path.join(p_args.output_folder, p_args.project_name)
     if not os.path.exists(p_args.output_folder):
         os.makedirs(p_args.output_folder)
 
-    p_args.commands = sorted(set(p_args.commands))
+    if hasattr(p_args, "commands"):
+        p_args.commands = sorted(set(p_args.commands))
 
     return p_args
 
@@ -92,7 +94,12 @@ def get_and_parse_radon_results(args):
     radon_commands = args.commands
     if not args.use_cache:
         get_radon_results(radon_commands, args.path, args.output_folder)
-    radon_parsers = {"raw": rp.raw_parser, "cc": rp.cc_parser_distinct, "hal": rp.hal_parser, "mi": rp.mi_parser}
+    radon_parsers = {
+        "raw": rp.radon_raw_parser,
+        "cc": rp.radon_cc_parser_distinct,
+        "hal": rp.radon_hal_parser,
+        "mi": rp.radon_mi_parser,
+    }
     for command in radon_commands:
         parser = radon_parsers[command]
         result_file = os.path.join(args.output_folder, f"radon_{command}_results.json")
@@ -107,15 +114,11 @@ def get_and_parse_radon_results(args):
 def get_multimetric_results(path: str, output_folder: str):
     source_files = []
     for root, dirs, files in os.walk(path):
-        source_files.extend(
-            [os.path.join(root, file) for file in files if file.endswith(".py")]
-        )
+        source_files.extend([os.path.join(root, file) for file in files if file.endswith(".py")])
     out = os.path.join(output_folder, "multimetric.json")
     err = os.path.join(output_folder, "mm_err.txt")
     with open(out, "w") as out, open(err, "w") as err:
-        subprocess.Popen(
-            ["multimetric", *source_files], stdout=out, stderr=err
-        ).communicate()
+        subprocess.Popen(["multimetric", *source_files], stdout=out, stderr=err).communicate()
 
 
 def get_and_parse_multimetric_results(args):
@@ -131,9 +134,45 @@ def get_and_parse_multimetric_results(args):
     with open(result_file, "r") as f:
         data = json.loads(f.read())
         for command in args.commands:
-            mm_parsers[command](
-                data, save_output=args.output_folder if args.save else None
-            )
+            mm_parsers[command](data, save_output=args.output_folder if args.save else None)
+
+
+def get_and_parse_flake8_results(args):
+    flake8_commands = args.commands
+    out = os.path.join(args.output_folder, "flake8.json")
+    if not args.use_cache:
+        get_flake8_results(flake8_commands, args.path, out)
+
+    flake8_parsers = {"mccabe": rp.flake8_mccabe_parser, "cognitive": rp.flake8_cognitive_parser}
+    with open(out, "r") as f:
+        data = json.loads(f.read())
+        for command in flake8_commands:
+            flake8_parsers[command](data, save_output=args.output_folder if args.save else None)
+
+
+def get_flake8_results(commands, path: str, out: str):
+    codes = {"mccabe": "C901", "cognitive": "CCR001"}
+    arguments = {
+        "mccabe": ["--max-complexity", "0"],
+        "cognitive": ["--max-cognitive-complexity", "-1"],
+    }
+    with open(out, "w"):
+        pass
+    subprocess.Popen(
+        [
+            "flake8",
+            "--format",
+            "json-pretty",
+            "--select=" + ",".join([codes[c] for c in commands]),
+            *[a for c in commands for a in arguments[c]],
+            "--output-file",
+            out,
+            ".",
+        ],
+        cwd=path,
+        stdout=sys.stdout,
+        stderr=sys.stderr,
+    ).communicate()
 
 
 if __name__ == "__main__":
@@ -143,3 +182,5 @@ if __name__ == "__main__":
         get_and_parse_radon_results(args)
     elif args.tool == "multimetric":
         get_and_parse_multimetric_results(args)
+    elif args.tool == "flake8":
+        get_and_parse_flake8_results(args)

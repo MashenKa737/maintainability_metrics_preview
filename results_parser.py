@@ -1,8 +1,9 @@
-# import json
 import os.path
+import textwrap
 
 import matplotlib.pyplot as plt
 import numpy as np
+import re
 
 
 def make_bar(
@@ -59,7 +60,7 @@ def make_stacked_bars(
         color="C1",
         size="small",
         bbox=dict(facecolor="white", alpha=0.8),
-        visible=False,  # all annotations are hidden until being picked
+        visible=False,
     )
     for index, rect in enumerate(plt_bars[-1].patches):
         text = plt.annotate(
@@ -126,7 +127,7 @@ def sort(values: list, labels: list, reverse=True):
     return zip(*values_and_labels)
 
 
-def cc_parser(data: dict, save_output: str = None):
+def radon_cc_parser(data: dict, save_output: str = None):
     complexities = []
     cc_info = []
     for filename in data.keys():
@@ -151,10 +152,10 @@ def cc_parser(data: dict, save_output: str = None):
         ylabel="Complexity",
     )
     make_plot_description(f"Total blocks count: {len(cc_info)}")
-    save_or_show(save_output, "cc.png")
+    save_or_show(save_output, "radon_cc.png")
 
 
-def cc_parser_distinct(data: dict, save_output: str = None):
+def radon_cc_parser_distinct(data: dict, save_output: str = None):
     complexities_funcs = []
     cc_info_funcs = []
 
@@ -207,10 +208,10 @@ def cc_parser_distinct(data: dict, save_output: str = None):
         ylabel="Complexity",
     )
     make_plot_description(f"Total blocks count: {len(cc_info_classes)}")
-    save_or_show(save_output, "cc_distinct.png")
+    save_or_show(save_output, "radon_cc_distinct.png")
 
 
-def hal_parser(data: dict, save_output: str = None):
+def radon_hal_parser(data: dict, save_output: str = None):
     difficulties_files = []
     summaries_files = []
     difficulties_funcs = []
@@ -242,11 +243,12 @@ def hal_parser(data: dict, save_output: str = None):
     plt.subplot(2, 1, 1)
     make_bar(
         fig,
-        difficulties_files,
+        np.array(difficulties_files) + 0.1,
         summaries_files,
         title="Halstead metric per file",
         xlabel="Files",
         ylabel="Difficulty",
+        bottom=-0.1,
     )
     make_plot_description(
         f"Total files count: {len(difficulties_files)}\n"
@@ -255,20 +257,21 @@ def hal_parser(data: dict, save_output: str = None):
     plt.subplot(2, 1, 2)
     make_bar(
         fig,
-        difficulties_funcs,
+        np.array(difficulties_funcs) + 0.1,
         summaries_funcs,
         title="Halstead metric per function",
         xlabel="Functions",
         ylabel="Difficulty",
+        bottom=-0.1,
     )
     make_plot_description(
         f"Total functions count: {len(difficulties_funcs)}\n"
         f"Nonzero halstead metric in {np.count_nonzero(difficulties_funcs)} functions"
     )
-    save_or_show(save_output, "Halstead.png")
+    save_or_show(save_output, "radon_halstead.png")
 
 
-def raw_parser(data: dict, save_output: str = None):
+def radon_raw_parser(data: dict, save_output: str = None):
     first_chart_keys = ["loc", "sloc", "single_comments", "multi", "blank"]
     first_chart_values = []
 
@@ -282,15 +285,19 @@ def raw_parser(data: dict, save_output: str = None):
 
     for filename in files:
         entity = data[filename]
-        label = f"filename: {filename}\n" + "\n".join([f"{key}: {value}" for key, value in entity.items()])
-        first_chart_values.append(tuple(entity[k] for k in first_chart_keys)+(label,))
-        lloc.append(entity['lloc'])
+        label = f"filename: {filename}\n" + "\n".join(
+            [f"{key}: {value}" for key, value in entity.items()]
+        )
+        first_chart_values.append(tuple(entity[k] for k in first_chart_keys) + (label,))
+        lloc.append(entity["lloc"])
         lloc_labels.append(label)
-        comments.append(entity['comments'])
+        comments.append(entity["comments"])
         comments_labels.append(label)
 
     first_chart_values = sorted(first_chart_values, reverse=True)
-    loc, sloc, oneline_strings, multiline_strings, blank, first_chart_labels = zip(*first_chart_values)
+    loc, sloc, oneline_strings, multiline_strings, blank, first_chart_labels = zip(
+        *first_chart_values
+    )
 
     lloc, lloc_labels = sort(lloc, lloc_labels)
     comments, comments_labels = sort(comments, comments_labels)
@@ -319,7 +326,7 @@ def raw_parser(data: dict, save_output: str = None):
         f"Multiline docstrings: {sum(multiline_strings)}\n"
         f"Blank: {sum(blank)}"
     )
-    save_or_show(save_output, "raw_statistics.png")
+    save_or_show(save_output, "radon_LOC_statistics.png")
 
     fig = plt.figure("Statistics", figsize=(10, 5), frameon=True, layout="constrained")
     plt.subplot(2, 1, 1)
@@ -336,22 +343,25 @@ def raw_parser(data: dict, save_output: str = None):
     make_bar(
         fig,
         labels=comments_labels,
-        values=comments,
+        values=np.array(comments) + 0.1,
         title="Comments",
         xlabel="files",
         ylabel="lines of code",
+        bottom=-0.1,
     )
     make_plot_description(
         f"Total files count: {len(files)}\n" f"Comments: {sum(comments)}\n"
     )
-    save_or_show(save_output, "raw_LLOC_Comments.png")
+    save_or_show(save_output, "radon_other_statistics.png")
 
 
-def mi_parser(data: dict, save_output: str = None):
+def radon_mi_parser(data: dict, save_output: str = None):
     descriptions, mi = zip(
         *[(f"file: {k}\nmi: {v['mi']}%", v["mi"]) for k, v in data.items()]
     )
-    inverted_mi = np.array(mi) - 100
+    inverted_mi = np.array(mi) - 101
+
+    inverted_mi, descriptions = sort(inverted_mi, descriptions, reverse=False)
     fig = plt.figure(
         "Maintainability index", figsize=(10, 4), frameon=True, layout="constrained"
     )
@@ -362,14 +372,14 @@ def mi_parser(data: dict, save_output: str = None):
         title="MI",
         xlabel="files",
         ylabel="Percentage",
-        bottom=100.0,
+        bottom=101,
     )
     plot_description = (
         f"Total files count: {len(descriptions)}\n"
         f"MI≠100% in {np.count_nonzero(inverted_mi)} files"
     )
     make_plot_description(plot_description)
-    save_or_show(save_output, "mi.png")
+    save_or_show(save_output, "radon_MI.png")
 
 
 def mm_cc_parser(data: dict, save_output: str = None):
@@ -399,11 +409,12 @@ def mm_hal_parser(data: dict, save_output: str = None):
     )
     make_bar(
         fig,
-        hal_values,
+        np.array(hal_values) + 0.1,
         hal_labels,
         title="Multimetric Halstead metric",
         xlabel="Files",
         ylabel="Difficulty",
+        bottom=-0.1,
     )
     save_or_show(save_output, "mm_Halstead.png")
 
@@ -430,10 +441,11 @@ def mm_raw_parser(data: dict, save_output: str = None):
     make_bar(
         fig,
         labels=comments_labels,
-        values=comments_values,
+        values=np.array(comments_values) + 0.1,
         title="Multimetric Comments",
         xlabel="Files",
         ylabel="Percentage",
+        bottom=-0.1,
     )
     save_or_show(save_output, "mm_raw.png")
 
@@ -443,7 +455,7 @@ def mm_mi_parser(data: dict, save_output: str = None):
     mi_labels, mi_values = multimetric_parse_metric(
         "maintainability_index", "MI", data, sort_order="ascending"
     )
-    inverted_mi = np.array(mi_values) - 171.0
+    inverted_mi = np.array(mi_values) - 172.0
     fig = plt.figure(
         "Maintainability index", figsize=(10, 4), frameon=True, layout="constrained"
     )
@@ -454,7 +466,7 @@ def mm_mi_parser(data: dict, save_output: str = None):
         title="Multimetric MI",
         xlabel="files",
         ylabel="Points",
-        bottom=171.0,
+        bottom=172.0,
     )
     save_or_show(save_output, "mm_mi.png")
 
@@ -503,3 +515,81 @@ def multimetric_parse_metric(
         values, labels = sort(values, labels, reverse=True)
 
     return labels, values
+
+
+def flake8_mccabe_parser(data: dict, save_output: str = None):
+    def mccabe_extract(*args):
+        entry = args[0]
+        text = entry["text"]
+        pattern = r"'(.*)' is too complex \((.*)\)"
+        match = re.fullmatch(pattern, text).groups()
+        value = int(match[1])
+        extra_label = f"value: {value}\n" + f"function: {match[0]}"
+        return value, extra_label
+
+    values, labels = flake8_parser(data, "C901", mccabe_extract)
+    make_bar(
+        plt.figure(
+            "Flake8 Mccabe complexity",
+            figsize=(12, 3),
+            frameon=True,
+            layout="constrained",
+        ),
+        values=values,
+        labels=labels,
+        title="Mccabe complexity",
+        xlabel="Functions",
+        ylabel="Complexity",
+    )
+    make_plot_description(f"Functions count: {len(labels)}")
+    save_or_show(save_output, "flake8_mccabe.png")
+
+
+def flake8_cognitive_parser(data: dict, save_output: str = None):
+    def cognitive_extract(*args):
+        entry = args[0]
+        text = entry["text"]
+        pattern = r"Cognitive complexity is too high \((.*) > (.*)\)"
+        match = re.fullmatch(pattern, text).groups()
+        value = int(match[0])
+        extra_label = f"value: {value}"
+        return value, extra_label
+
+    values, labels = flake8_parser(data, "CCR001", cognitive_extract)
+    make_bar(
+        plt.figure(
+            "Flake8 Cognitive complexity",
+            figsize=(12, 3),
+            frameon=True,
+            layout="constrained",
+        ),
+        values=np.array(values) + 0.1,
+        labels=labels,
+        title="Cognitive complexity",
+        xlabel="Functions",
+        ylabel="Complexity",
+        bottom=-0.1,
+    )
+    make_plot_description(f"Functions count: {len(labels)}")
+    save_or_show(save_output, "flake8_cognitive.png")
+
+
+def flake8_parser(data: dict, code: str, specific_extract: callable):
+    files = [k for k in data.keys() if data[k]]
+    values = []
+    labels = []
+    for file in files:
+        for entry in data[file]:
+            if entry["code"] != code:
+                continue
+            extract = specific_extract(entry)
+            value = extract[0]
+            values.append(value)
+            labels.append(
+                f"file: {file}\n"
+                f"{extract[1]}\n"
+                f"line: {entry['line_number']}\n"
+                f"physical line: {textwrap.shorten(entry['physical_line'].strip(), width=20, placeholder='...')}"
+            )
+    values, labels = sort(values, labels)
+    return values, labels
