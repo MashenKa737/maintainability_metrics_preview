@@ -134,7 +134,9 @@ def get_and_parse_multimetric_results(args):
     with open(result_file, "r") as f:
         data = json.loads(f.read())
         for command in args.commands:
-            mm_parsers[command](data, save_output=args.output_folder if args.save else None)
+            mm_parsers[command](
+                data, path=os.path.abspath(args.path), save_output=args.output_folder if args.save else None
+            )
 
 
 def get_and_parse_flake8_results(args):
