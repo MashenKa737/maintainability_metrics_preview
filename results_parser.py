@@ -385,7 +385,7 @@ def radon_raw_parser(data: dict, save_output: str = None):
 
 def radon_mi_parser(data: dict, save_output: str = None):
     descriptions, mi = zip(*[(f"file: {k}\nmi: {v['mi']}%", v["mi"]) for k, v in data.items()])
-    inverted_mi = np.array(mi) - 101.0
+    inverted_mi = np.array(mi) - 100.0
 
     inverted_mi, descriptions = sort(inverted_mi, descriptions, reverse=False)
     fig, ax = plt.subplots(
@@ -394,7 +394,7 @@ def radon_mi_parser(data: dict, save_output: str = None):
     make_bar(
         fig,
         ax,
-        values=inverted_mi,
+        values=np.array(inverted_mi) - 1.0,
         labels=descriptions,
         title="Radon Maintainability Index",
         xlabel="files",
