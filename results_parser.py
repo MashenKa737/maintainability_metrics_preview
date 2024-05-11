@@ -295,15 +295,9 @@ def radon_hal_parser(data: dict, save_output: str = None):
     save_or_show(save_output, "radon_halstead.png")
 
 
-def radon_raw_parser(data: dict, save_output: str = None):
+def radon_raw_aggregate_parser(data: dict, save_output: str = None):
     first_chart_keys = ["loc", "sloc", "single_comments", "multi", "blank"]
     first_chart_values = []
-
-    lloc = []
-    lloc_labels = []
-
-    comments = []
-    comments_labels = []
 
     files = list(data.keys())
 
@@ -311,16 +305,9 @@ def radon_raw_parser(data: dict, save_output: str = None):
         entity = data[filename]
         label = f"filename: {filename}\n" + "\n".join([f"{key}: {value}" for key, value in entity.items()])
         first_chart_values.append(tuple(entity[k] for k in first_chart_keys) + (label,))
-        lloc.append(entity["lloc"])
-        lloc_labels.append(label)
-        comments.append(entity["comments"])
-        comments_labels.append(label)
 
     first_chart_values = sorted(first_chart_values, reverse=True)
     loc, sloc, oneline_strings, multiline_strings, blank, first_chart_labels = zip(*first_chart_values)
-
-    lloc, lloc_labels = sort(lloc, lloc_labels)
-    comments, comments_labels = sort(comments, comments_labels)
 
     fig, ax = plt.subplots(
         num="Radon Statistics Aggregate", figsize=(10, 5), frameon=True, layout="constrained"
@@ -336,7 +323,7 @@ def radon_raw_parser(data: dict, save_output: str = None):
             "multiline docstrings",
             "blank",
         ),
-        title="Radon LOC",
+        title="LOC Statistics",
         xlabel="files",
         ylabel="lines of code",
         bottom=-1,
@@ -352,36 +339,92 @@ def radon_raw_parser(data: dict, save_output: str = None):
         f"Multiline docstrings: {sum(multiline_strings)}\n"
         f"Blank: {sum(blank)}"
     )
-    save_or_show(save_output, "radon_LOC_statistics.png")
+    save_or_show(save_output, "radon_statistics_aggregate.png")
 
-    fig = plt.figure("Radon Statistics", figsize=(10, 5), frameon=True, layout="constrained")
-    ax1 = plt.subplot(2, 1, 1)
+
+def radon_raw_distinct_parser(data: dict, save_output: str = None):
+    data_distinct = []
+
+    for filename, entity in data.items():
+        label = f"filename: {filename}\n" + "\n".join([f"{key}: {value}" for key, value in entity.items()])
+        data_distinct.append(
+            (
+                label,
+                entity["loc"],
+                entity["lloc"],
+                entity["single_comments"],
+                entity["multi"],
+                entity["comments"],
+            )
+        )
+
+    loc, loc_labels = zip(*sorted([(e[1], e[0]) for e in data_distinct], reverse=True))
+    lloc, lloc_labels = zip(*sorted([(e[2], e[0]) for e in data_distinct], reverse=True))
+    doc, doc_labels = zip(*sorted([(e[3] + e[4], e[0]) for e in data_distinct]))
+    comments, comments_labels = zip(*sorted([(e[5], e[0]) for e in data_distinct]))
+
+    fig = plt.figure("Radon Statistics", figsize=(16, 8), frameon=True, layout="constrained")
+    ax1 = plt.subplot(2, 2, 1)
     make_bar(
         fig,
         ax1,
-        labels=lloc_labels,
-        values=np.array(lloc) + 1,
-        title="Radon Logical lines of code",
+        labels=loc_labels,
+        values=np.array(loc) + 1,
+        title="Logical lines of code",
         xlabel="files",
         ylabel="lines of code",
         bottom=-1,
     )
-    add_statistics(lloc, ax1)
-    make_plot_description(f"Total files count: {len(files)}\n" f"LLOC: {sum(lloc)}")
-    ax2 = plt.subplot(2, 1, 2)
+    add_statistics(loc, ax1)
+    make_plot_description(f"LOC: {sum(loc)}")
+
+    ax2 = plt.subplot(2, 2, 2)
     make_bar(
         fig,
         ax2,
-        labels=comments_labels,
-        values=np.array(comments) + 1,
-        title="Radon Comments `#`",
+        labels=lloc_labels,
+        values=np.array(lloc) + 1,
+        title="Logical lines of code",
         xlabel="files",
         ylabel="lines of code",
         bottom=-1,
     )
-    add_statistics(comments, ax2)
-    make_plot_description(f"Total files count: {len(files)}\n" f"Comments: {sum(comments)}\n")
-    save_or_show(save_output, "radon_other_statistics.png")
+    add_statistics(lloc, ax2)
+    make_plot_description(f"LLOC: {sum(lloc)}")
+
+    ax3 = plt.subplot(2, 2, 3)
+    make_bar(
+        fig,
+        ax3,
+        labels=comments_labels,
+        values=np.array(comments) + 1,
+        title="Comments `#`",
+        xlabel="files",
+        ylabel="lines of code",
+        bottom=-1,
+    )
+    add_statistics(comments, ax3)
+    make_plot_description(f"Comments: {sum(comments)}")
+
+    ax4 = plt.subplot(2, 2, 4)
+    make_bar(
+        fig,
+        ax4,
+        labels=doc_labels,
+        values=np.array(doc) + 1,
+        title="Docstrings (and oneline comments)",
+        xlabel="files",
+        ylabel="lines of code",
+        bottom=-1,
+    )
+    add_statistics(comments, ax4)
+    make_plot_description(f"Docstrings: {sum(doc)}")
+    save_or_show(save_output, "radon_distinct_statistics.png")
+
+
+def radon_raw_parser(data: dict, save_output: str = None):
+    radon_raw_aggregate_parser(data, save_output)
+    radon_raw_distinct_parser(data, save_output)
 
 
 def radon_mi_parser(data: dict, save_output: str = None):
@@ -578,7 +621,7 @@ def flake8_mccabe_parser(data: dict, save_output: str = None):
         ax,
         values=values,
         labels=labels,
-        title="Flake8 Mccabe complexity",
+        title="Mccabe complexity",
         xlabel="Functions",
         ylabel="Complexity",
     )
@@ -609,7 +652,7 @@ def flake8_cognitive_parser(data: dict, save_output: str = None):
         ax,
         values=np.array(values) + 0.1,
         labels=labels,
-        title="Flake8 Cognitive complexity",
+        title="Cognitive complexity",
         xlabel="Functions",
         ylabel="Complexity",
         bottom=-0.1,
@@ -688,7 +731,7 @@ def docstr_parser(text: str, path: str, save_output: str = None):
         xlabel="files",
         ylabel="docstrings",
         bottom=-1,
-        annotate_index=0
+        annotate_index=0,
     )
     add_statistics(missing, ax1, loc="lower right")
     ax1.legend(handles=bs, loc="upper right", framealpha=0.5)
@@ -696,7 +739,7 @@ def docstr_parser(text: str, path: str, save_output: str = None):
     make_bar(
         fig,
         ax2,
-        values= np.array(coverage)-101.0,
+        values=np.array(coverage) - 101.0,
         labels=labels2,
         title="Docstring coverage per file",
         xlabel="files",
@@ -707,4 +750,3 @@ def docstr_parser(text: str, path: str, save_output: str = None):
 
     make_plot_description(f"Files processed: {len(data)}\nTotal: " + stats.strip())
     save_or_show(save_output, "docstring_coverage.png")
-

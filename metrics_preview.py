@@ -56,6 +56,9 @@ def setup_arguments():
     docstr_name = "docstr-coverage"
     docstr_parser = subparsers.add_parser(docstr_name)
 
+    final_name = "final"
+    final_parser = subparsers.add_parser(final_name)
+
     p_args = parser.parse_args()
 
     current_path = os.path.abspath(os.getcwd())
@@ -93,12 +96,17 @@ def get_radon_results(commands: list, project_path: str, output_folder: str):
     print("radon results done")
 
 
-def get_and_parse_radon_results(args):
+def get_and_parse_radon_results(args, distinct=None):
     radon_commands = args.commands
     if not args.use_cache:
         get_radon_results(radon_commands, args.path, args.output_folder)
+
     radon_parsers = {
-        "raw": rp.radon_raw_parser,
+        "raw": (
+            rp.radon_raw_parser
+            if distinct is None
+            else (rp.radon_raw_distinct_parser if distinct else rp.radon_raw_aggregate_parser)
+        ),
         "cc": rp.radon_cc_parser_distinct,
         "hal": rp.radon_hal_parser,
         "mi": rp.radon_mi_parser,
@@ -192,7 +200,16 @@ def get_and_parse_docstr_results(args):
         get_docstr_results(args.path, out)
     with open(out, "r") as f:
         text = f.read()
-        rp.docstr_parser(text, path=args.path)
+        rp.docstr_parser(text, path=os.path.abspath(args.path))
+
+
+def get_and_parse_final_results(args):
+    args.commands = ["raw", "cc"]
+    get_and_parse_radon_results(args, False)
+    args.commands = ["cognitive"]
+    get_and_parse_flake8_results(args)
+    args.commands = []
+    get_and_parse_docstr_results(args)
 
 
 if __name__ == "__main__":
@@ -206,3 +223,5 @@ if __name__ == "__main__":
         get_and_parse_flake8_results(args)
     elif args.tool == "docstr-coverage":
         get_and_parse_docstr_results(args)
+    elif args.tool == "final":
+        get_and_parse_final_results(args)
