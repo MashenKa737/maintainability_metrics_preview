@@ -6,7 +6,7 @@ import numpy as np
 import re
 
 
-def make_bar(fig, ax, values: list, labels: list, title: str, xlabel: str, ylabel: str, bottom=0.0):
+def make_bar(fig, ax, values: list, labels: list, title: str, xlabel: str, ylabel: str, bottom=0.0, show_first=True):
     return make_stacked_bars(
         fig,
         ax,
@@ -17,7 +17,7 @@ def make_bar(fig, ax, values: list, labels: list, title: str, xlabel: str, ylabe
         xlabel=xlabel,
         ylabel=ylabel,
         bottom=bottom,
-        show_first=True,
+        show_first=show_first,
     )
 
 
@@ -103,17 +103,45 @@ def make_stacked_bars(
     return plt_bars
 
 
-def add_statistics(values: list, ax: plt.Axes, loc="upper right"):
+def approximate(values: list, inverted=True):  # inverted: the less is better
+    values = np.array(values)
+
+    max_height = np.max(values)
+    min_height = np.min(values)
+    if max_height == min_height:
+        return min_height
+
+    tr_height = (max_height + min_height) / 2
+    d_height = max_height - min_height
+    width = len(values)
+    square = width * d_height
+
+    if inverted:
+        d_square = np.sum(values - min_height)
+        appr = tr_height + (d_height / 2) * d_square / square
+    else:
+        d_square = np.sum(max_height - values)
+        appr = tr_height - (d_height / 2) * d_square / square
+
+    return appr
+
+
+def add_statistics(values: list, ax: plt.Axes, inverted = True, loc="upper right"):
     max_v = np.max(values)
     median_v = np.median(values)
     average_v = np.average(values)
     min_v = np.min(values)
 
+    appr = approximate(values, inverted)
+
     l_max = ax.axhline(max_v, ls=":", color="red", label=f"max={max_v}")
     l_min = ax.axhline(min_v, ls="-", color="blue", label=f"min={min_v}")
-    l_med = ax.axhline(median_v, ls="-.", color="orange", label=f"median={median_v}")
     l_ave = ax.axhline(average_v, ls="--", color="green", label=f"average={average_v}")
-    legend = ax.legend(handles=[l_max, l_min, l_med, l_ave], loc=loc, fontsize="small", framealpha=0.5)
+
+    l_appr = ax.axhline(appr, ls="-", color="magenta", linewidth=2, label=f"approximate={appr}")
+    legend = ax.legend(
+        handles=[l_max, l_min, l_ave, l_appr], loc=loc, fontsize="small", framealpha=0.5
+    )
     ax.add_artist(legend)
 
 
@@ -445,7 +473,7 @@ def radon_mi_parser(data: dict, save_output: str = None):
         ylabel="Percentage",
         bottom=101.0,
     )
-    add_statistics(mi, ax)
+    add_statistics(mi, ax, inverted=False)
     plot_description = (
         f"Total files count: {len(descriptions)}\n" f"MI≠100% in {np.count_nonzero(inverted_mi)} files"
     )
@@ -549,7 +577,7 @@ def mm_mi_parser(data: dict, path: str, save_output: str = None):
         ylabel="Points",
         bottom=172.0,
     )
-    add_statistics(mi_values, ax)
+    add_statistics(mi_values, ax, inverted=False)
     save_or_show(save_output, "mm_mi.png")
 
 
@@ -746,7 +774,7 @@ def docstr_parser(text: str, path: str, save_output: str = None):
         ylabel="percentage",
         bottom=101.0,
     )
-    add_statistics(coverage, ax2, loc="lower right")
+    add_statistics(coverage, ax2, inverted=False, loc="lower right")
 
     make_plot_description(f"Files processed: {len(data)}\nTotal: " + stats.strip())
     save_or_show(save_output, "docstring_coverage.png")

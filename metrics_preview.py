@@ -200,7 +200,7 @@ def get_and_parse_docstr_results(args):
         get_docstr_results(args.path, out)
     with open(out, "r") as f:
         text = f.read()
-        rp.docstr_parser(text, path=os.path.abspath(args.path))
+        rp.docstr_parser(text, path=os.path.abspath(args.path), save_output=args.output_folder if args.save else None)
 
 
 def get_and_parse_final_results(args):
