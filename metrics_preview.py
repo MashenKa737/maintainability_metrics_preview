@@ -6,6 +6,7 @@ import sys
 
 import json
 import results_parser as rp
+import mi_preview as mi_p
 
 
 def setup_arguments():
@@ -48,7 +49,7 @@ def setup_arguments():
 
     flake8_name = "flake8"
     flake8_parser = subparsers.add_parser(flake8_name)
-    flake8_commands = {"mccabe", "cognitive"}
+    flake8_commands = {"mccabe", "cognitive", "cohesion"}
     flake8_parser.add_argument(
         "--commands", "-c", choices=flake8_commands, nargs="+", default=flake8_commands
     )
@@ -105,9 +106,9 @@ def get_and_parse_radon_results(args, distinct=None):
         "raw": (
             rp.radon_raw_parser
             if distinct is None
-            else (rp.radon_raw_distinct_parser if distinct else rp.radon_raw_aggregate_parser)
+            else (rp.radon_raw_distinct_preview if distinct else rp.radon_raw_aggregate_preview)
         ),
-        "cc": rp.radon_cc_parser_distinct,
+        "cc": rp.radon_cc_distinct_preview,
         "hal": rp.radon_hal_parser,
         "mi": rp.radon_mi_parser,
     }
@@ -156,7 +157,11 @@ def get_and_parse_flake8_results(args):
     if not args.use_cache:
         get_flake8_results(flake8_commands, args.path, out)
 
-    flake8_parsers = {"mccabe": rp.flake8_mccabe_parser, "cognitive": rp.flake8_cognitive_parser}
+    flake8_parsers = {
+        "mccabe": rp.flake8_mccabe_preview,
+        "cognitive": rp.flake8_cognitive_preview,
+        "cohesion": rp.flake8_cohesion_preview,
+    }
     with open(out, "r") as f:
         data = json.loads(f.read())
         for command in flake8_commands:
@@ -164,28 +169,28 @@ def get_and_parse_flake8_results(args):
 
 
 def get_flake8_results(commands, path: str, out: str):
-    codes = {"mccabe": "C901", "cognitive": "CCR001"}
+    codes = {"mccabe": "C901", "cognitive": "CCR001", "cohesion": "H601"}
     arguments = {
         "mccabe": ["--max-complexity", "0"],
         "cognitive": ["--max-cognitive-complexity", "-1"],
+        "cohesion": ["--cohesion-below=100"],
     }
-    with open(out, "w"):
-        pass
-    subprocess.Popen(
-        [
+    with open(out, "w") as f:
+        args = [
             "flake8",
             "--format",
             "json-pretty",
             "--select=" + ",".join([codes[c] for c in commands]),
             *[a for c in commands for a in arguments[c]],
-            "--output-file",
-            out,
             ".",
-        ],
-        cwd=path,
-        stdout=sys.stdout,
-        stderr=sys.stderr,
-    ).communicate()
+        ]
+        print(args)
+        subprocess.Popen(
+            args,
+            cwd=path,
+            stdout=f,
+            stderr=sys.stderr,
+        ).communicate()
 
 
 def get_docstr_results(project_path: str, out: str):
@@ -200,16 +205,49 @@ def get_and_parse_docstr_results(args):
         get_docstr_results(args.path, out)
     with open(out, "r") as f:
         text = f.read()
-        rp.docstr_parser(text, path=os.path.abspath(args.path), save_output=args.output_folder if args.save else None)
+        rp.docstr_preview(
+            text, path=os.path.abspath(args.path), save_output=args.output_folder if args.save else None
+        )
 
 
 def get_and_parse_final_results(args):
     args.commands = ["raw", "cc"]
     get_and_parse_radon_results(args, False)
-    args.commands = ["cognitive"]
+    args.commands = ["cognitive", "cohesion"]
     get_and_parse_flake8_results(args)
     args.commands = []
     get_and_parse_docstr_results(args)
+
+
+def get_and_parse_final_results_with_mi(args):
+    if not args.use_cache:
+        get_radon_results(["raw", "cc"], args.path, args.output_folder)
+        get_flake8_results(
+            ["cognitive", "cohesion"], args.path, os.path.join(args.output_folder, "flake8.json")
+        )
+        get_docstr_results(args.path, os.path.join(args.output_folder, "docstr_results.txt"))
+
+    cc_data = dict()
+    with open(os.path.join(args.output_folder, "radon_cc_results.json"), "r") as f:
+        cc_data.update(json.loads(f.read()))
+    raw_data = dict()
+    with open(os.path.join(args.output_folder, "radon_raw_results.json"), "r") as f:
+        raw_data.update(json.loads(f.read()))
+    flake8_data = dict()
+    with open(os.path.join(args.output_folder, "flake8.json"), "r") as f:
+        flake8_data.update(json.loads(f.read()))
+    docstrings_data = ""
+    with open(os.path.join(args.output_folder, "docstr_results.txt"), "r") as f:
+        docstrings_data += f.read()
+
+    mi_p.MIPreview().present(
+        data=(cc_data, raw_data, flake8_data, docstrings_data, os.path.abspath(args.path)),
+        save=args.save,
+        output_folder=args.output_folder,
+    )
+
+    args.use_cache = True
+    get_and_parse_final_results(args)
 
 
 if __name__ == "__main__":
@@ -224,4 +262,4 @@ if __name__ == "__main__":
     elif args.tool == "docstr-coverage":
         get_and_parse_docstr_results(args)
     elif args.tool == "final":
-        get_and_parse_final_results(args)
+        get_and_parse_final_results_with_mi(args)
