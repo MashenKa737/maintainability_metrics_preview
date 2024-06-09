@@ -97,18 +97,28 @@ def get_radon_results(commands: list, project_path: str, output_folder: str):
     print("radon results done")
 
 
-def get_and_parse_radon_results(args, distinct=None):
+def get_and_parse_radon_results(args, raw_distinct=None, cc_charts=["func", "class"]):
     radon_commands = args.commands
     if not args.use_cache:
         get_radon_results(radon_commands, args.path, args.output_folder)
 
+    radon_raw_parser = rp.radon_raw_parser
+    if raw_distinct is not None:
+        if raw_distinct:
+            radon_raw_parser = rp.radon_raw_distinct_preview
+        else:
+            radon_raw_parser = rp.radon_raw_aggregate_preview
+    radon_cc_parser = rp.radon_cc_preview
+    if "func" in cc_charts and "class" in cc_charts:
+        radon_cc_parser = rp.radon_cc_distinct_preview
+    elif "func" in cc_charts:
+        radon_cc_parser = rp.radon_cc_func_preview
+    elif "class" in cc_charts:
+        radon_cc_parser = rp.radon_cc_class_preview
+
     radon_parsers = {
-        "raw": (
-            rp.radon_raw_parser
-            if distinct is None
-            else (rp.radon_raw_distinct_preview if distinct else rp.radon_raw_aggregate_preview)
-        ),
-        "cc": rp.radon_cc_distinct_preview,
+        "raw": radon_raw_parser,
+        "cc": radon_cc_parser,
         "hal": rp.radon_hal_parser,
         "mi": rp.radon_mi_parser,
     }
@@ -212,7 +222,7 @@ def get_and_parse_docstr_results(args):
 
 def get_and_parse_final_results(args):
     args.commands = ["raw", "cc"]
-    get_and_parse_radon_results(args, False)
+    get_and_parse_radon_results(args, False, ["func"])
     args.commands = ["cognitive", "cohesion"]
     get_and_parse_flake8_results(args)
     args.commands = []

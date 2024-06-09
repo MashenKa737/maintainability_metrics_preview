@@ -15,13 +15,13 @@ class Stats:
         return self.good + self.tolerant + self.bad + self.dead
 
 
-def evaluate(stats: Stats, bad_penalty=5.0, tolerant_penalty=0.5) -> float:
+def evaluate(stats: Stats, bad_penalty=0.1, tolerant_penalty=0.02) -> float:
     if stats.is_empty():
         return 1.0
     if stats.dead:
         return 0
     return max(
-        0.0, 1.0 - float(stats.bad * bad_penalty + stats.tolerant * tolerant_penalty) / float(stats.all())
+        0.0, float(stats.good)/stats.all() - stats.bad * bad_penalty - stats.tolerant * tolerant_penalty
     )
 
 
@@ -57,8 +57,8 @@ class Limits:
 
 cc_limits = Limits(
     good=pd.Interval(1, 10, closed="both"),
-    tolerant=pd.Interval(10, 20, closed="right"),
-    bad=pd.Interval(20, 50),
+    tolerant=pd.Interval(1, 20, closed="right"),
+    bad=pd.Interval(1, 40),
 )
 
 cognitive_limits = Limits(
@@ -79,9 +79,15 @@ loc_func_limits = Limits(
     bad=pd.Interval(1, 500, closed="both"),
 )
 
+docstr_coverage_limits = Limits(
+    good=pd.Interval(70, 100, closed="both"),
+    tolerant=pd.Interval(40, 100, closed="both"),
+    bad=pd.Interval(0, 100, closed="both"),
+)
+
 
 def loc_package(lloc: int) -> float:
-    return max(0.0, 1 - float(lloc) / 50000)
+    return max(0.0, 1 - float(lloc) / 20000)
 
 
 def loc_package_complex(total: int, func_data: list, file_data: list) -> float:
@@ -131,7 +137,7 @@ def mi_file_stats(loc, func_loc, file_cc, file_cognitive, file_cohesion, file_co
     c_score = c_complex(file_cc, file_cognitive)
     red_score = cohesion_limits.score(file_cohesion)
     cov_score = coverage(file_coverage)
-    mi = 0.25 * loc_score + 0.25 * c_score + 0.25 * red_score + 0.25 * cov_score
+    mi = 0.15 * loc_score + 0.5 * c_score + 0.15 * red_score + 0.2 * cov_score
     return [q.__round__(2) for q in [mi, loc_score, c_score, red_score, cov_score]]
 
 
@@ -150,5 +156,5 @@ def mi_package_stats(
     c_score = c_complex(package_cc, package_cognitive)
     red_score = redundancy_complex(dup_lines, package_cohesion)
     cov_score = coverage(package_coverage)
-    mi = 0.25 * loc_score + 0.25 * c_score + 0.25 * red_score + 0.25 * cov_score
+    mi = 0.15 * loc_score + 0.5 * c_score + 0.15 * red_score + 0.2 * cov_score
     return [q.__round__(2) for q in [mi, loc_score, c_score, red_score, cov_score]]
