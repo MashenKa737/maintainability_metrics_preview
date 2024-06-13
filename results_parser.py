@@ -31,18 +31,19 @@ def make_stacked_bars(
     xlabel: str,
     ylabel: str,
     bottom=0.0,
+    annotate_index=-1,
     show_first=True,
 ):
-    plt.title(title)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.grid()
-    plt.xticks(visible=False)  # don't show x labels to avoid overlap
+    ax.set_title(title)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.grid()
+    plt.setp(ax.get_xticklabels(), visible=False)  # don't show x labels to avoid overlap
     plt_bars = []
     bottom = np.repeat(bottom, len(labels))
     for bar_values, category in zip(values, categories):
         plt_bars.append(
-            plt.bar(
+            ax.bar(
                 x=labels,
                 height=bar_values,
                 align="edge",
@@ -62,12 +63,12 @@ def make_stacked_bars(
         bbox=dict(facecolor="white", alpha=0.8),
         visible=False,
     )
-    for index, rect in enumerate(plt_bars[-1].patches):
-        text = plt.annotate(
+    for index, rect in enumerate(plt_bars[annotate_index].patches):
+        text = ax.annotate(
             labels[index],
             xy=(rect.get_x(), rect.get_y() + rect.get_height()),
-            xytext=(50, -np.copysign(50, rect.get_height())),
-            textcoords="offset pixels",
+            xytext=(50, 0.9),
+            textcoords=("offset pixels", "axes fraction"),
             arrowprops=dict(arrowstyle="->"),
             annotation_clip=True,
             **text_kwargs,
@@ -112,7 +113,7 @@ def add_statistics(values: list, ax: plt.Axes, loc="upper right"):
     l_min = ax.axhline(min_v, ls="-", color="blue", label=f"min={min_v}")
     l_med = ax.axhline(median_v, ls="-.", color="orange", label=f"median={median_v}")
     l_ave = ax.axhline(average_v, ls="--", color="green", label=f"average={average_v}")
-    legend = ax.legend(handles=[l_max, l_min, l_med, l_ave], loc=loc, fontsize="small")
+    legend = ax.legend(handles=[l_max, l_min, l_med, l_ave], loc=loc, fontsize="small", framealpha=0.5)
     ax.add_artist(legend)
 
 
@@ -637,3 +638,73 @@ def flake8_parser(data: dict, code: str, specific_extract: callable):
             )
     values, labels = sort(values, labels)
     return values, labels
+
+
+def docstr_parser(text: str, path: str, save_output: str = None):
+    pattern = r'File: "(.*)"\n Needed: (.*); Found: (.*); Missing: (.*); Coverage: (.*)%'
+    data = []
+    for match in re.findall(pattern, text):
+        filename = match[0]
+        filename = filename.replace(path, "")
+        needed = int(match[1])
+        found = int(match[2])
+        missing = int(match[3])
+        coverage = float(match[4])
+        data.append(
+            {
+                "filename": filename,
+                "needed": needed,
+                "found": found,
+                "missing": missing,
+                "coverage": coverage,
+                "label": f"file: {filename}\n"
+                + f"coverage: {coverage}%\n"
+                + f"needed: {needed}\n"
+                + f"found: {found}\n"
+                + f"missing: {missing}",
+            }
+        )
+    stats = text.split("Overall statistics for ", 1)[1]
+
+    data1 = sorted(data, key=lambda e: e["missing"], reverse=True)
+    data2 = sorted(data, key=lambda e: e["coverage"])
+
+    labels1, found, missing = zip(*[(e["label"], e["found"], e["missing"]) for e in data1])
+    labels2, coverage = zip(*[(e["label"], e["coverage"]) for e in data2])
+
+    fig, (ax1, ax2) = plt.subplots(
+        nrows=2, num="Docstring coverage", figsize=(10, 5), frameon=True, layout="constrained"
+    )
+    bs = make_stacked_bars(
+        fig,
+        ax1,
+        values=(np.array(missing) + 1, found),
+        labels=labels1,
+        categories=(
+            "missing",
+            "found",
+        ),
+        title="Docstrings per file",
+        xlabel="files",
+        ylabel="docstrings",
+        bottom=-1,
+        annotate_index=0
+    )
+    add_statistics(missing, ax1, loc="lower right")
+    ax1.legend(handles=bs, loc="upper right", framealpha=0.5)
+
+    make_bar(
+        fig,
+        ax2,
+        values= np.array(coverage)-101.0,
+        labels=labels2,
+        title="Docstring coverage per file",
+        xlabel="files",
+        ylabel="percentage",
+        bottom=101.0,
+    )
+    add_statistics(coverage, ax2, loc="lower right")
+
+    make_plot_description(f"Files processed: {len(data)}\nTotal: " + stats.strip())
+    save_or_show(save_output, "docstring_coverage.png")
+

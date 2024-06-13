@@ -53,6 +53,9 @@ def setup_arguments():
         "--commands", "-c", choices=flake8_commands, nargs="+", default=flake8_commands
     )
 
+    docstr_name = "docstr-coverage"
+    docstr_parser = subparsers.add_parser(docstr_name)
+
     p_args = parser.parse_args()
 
     current_path = os.path.abspath(os.getcwd())
@@ -177,6 +180,21 @@ def get_flake8_results(commands, path: str, out: str):
     ).communicate()
 
 
+def get_docstr_results(project_path: str, out: str):
+    with open(out, "w") as out:
+        subprocess.Popen(["docstr-coverage", project_path, "-v", "2"], stdout=out, stderr=out).communicate()
+    print("docstr-coverage results done")
+
+
+def get_and_parse_docstr_results(args):
+    out = os.path.join(args.output_folder, "docstr_results.txt")
+    if not args.use_cache:
+        get_docstr_results(args.path, out)
+    with open(out, "r") as f:
+        text = f.read()
+        rp.docstr_parser(text, path=args.path)
+
+
 if __name__ == "__main__":
     args = setup_arguments()
     print(args)
@@ -186,3 +204,5 @@ if __name__ == "__main__":
         get_and_parse_multimetric_results(args)
     elif args.tool == "flake8":
         get_and_parse_flake8_results(args)
+    elif args.tool == "docstr-coverage":
+        get_and_parse_docstr_results(args)
