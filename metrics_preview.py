@@ -59,6 +59,11 @@ def setup_arguments():
 
     final_name = "final"
     final_parser = subparsers.add_parser(final_name)
+    final_commands = {"mi", "loc", "cc", "cog", "coh", "doc"}
+    final_parser.add_argument("--commands", "-c", choices=final_commands, nargs="+", default=final_commands)
+
+    score_name = "mi_score"
+    mi_score_parser = subparsers.add_parser(score_name)
 
     p_args = parser.parse_args()
 
@@ -74,6 +79,8 @@ def setup_arguments():
 
     if hasattr(p_args, "commands"):
         p_args.commands = sorted(set(p_args.commands))
+    else:
+        p_args.commands = []
 
     return p_args
 
@@ -221,43 +228,93 @@ def get_and_parse_docstr_results(args):
 
 
 def get_and_parse_final_results(args):
-    args.commands = ["raw", "cc"]
-    get_and_parse_radon_results(args, False, ["func"])
-    args.commands = ["cognitive", "cohesion"]
-    get_and_parse_flake8_results(args)
-    args.commands = []
-    get_and_parse_docstr_results(args)
+    commands = args.commands
+    radon_commands = [v for k, v in {"loc": "raw", "cc": "cc"}.items() if k in commands]
+    flake8_commands = [v for k, v in {"cog": "cognitive", "coh": "cohesion"}.items() if k in commands]
+    docstr_commands = [v for k, v in {"doc": ""}.items() if k in commands]
+
+    if len(radon_commands) != 0:
+        args.commands = radon_commands
+        get_and_parse_radon_results(args, False, ["func"])
+    if len(flake8_commands) != 0:
+        args.commands = flake8_commands
+        get_and_parse_flake8_results(args)
+    if len(docstr_commands) != 0:
+        args.commands = []
+        get_and_parse_docstr_results(args)
 
 
-def get_and_parse_final_results_with_mi(args):
-    if not args.use_cache:
-        get_radon_results(["raw", "cc"], args.path, args.output_folder)
-        get_flake8_results(
-            ["cognitive", "cohesion"], args.path, os.path.join(args.output_folder, "flake8.json")
-        )
-        get_docstr_results(args.path, os.path.join(args.output_folder, "docstr_results.txt"))
+def get_and_parse_final_results_with_mi(args, score_only):
+    commands = args.commands
+    flake8_all_commands = {"cog": "cognitive", "coh": "cohesion"}
+    radon_all_commands = {"loc": "raw", "cc": "cc"}
+    docstr_all_commands = {"doc": ""}
 
-    cc_data = dict()
-    with open(os.path.join(args.output_folder, "radon_cc_results.json"), "r") as f:
-        cc_data.update(json.loads(f.read()))
-    raw_data = dict()
-    with open(os.path.join(args.output_folder, "radon_raw_results.json"), "r") as f:
-        raw_data.update(json.loads(f.read()))
-    flake8_data = dict()
-    with open(os.path.join(args.output_folder, "flake8.json"), "r") as f:
-        flake8_data.update(json.loads(f.read()))
-    docstrings_data = ""
-    with open(os.path.join(args.output_folder, "docstr_results.txt"), "r") as f:
-        docstrings_data += f.read()
+    print(score_only or ("mi" in commands))
 
-    mi_p.MIPreview().present(
-        data=(cc_data, raw_data, flake8_data, docstrings_data, os.path.abspath(args.path)),
-        save=args.save,
-        output_folder=args.output_folder,
+    flake8_commands = (
+        flake8_all_commands.values()
+        if score_only or ("mi" in commands)
+        else [v for k, v in flake8_all_commands.items() if k in commands]
+    )
+    radon_commands = (
+        radon_all_commands.values()
+        if score_only or ("mi" in commands)
+        else [v for k, v in radon_all_commands.items() if k in commands]
+    )
+    docstr_commands = (
+        docstr_all_commands.values()
+        if score_only or ("mi" in commands)
+        else [v for k, v in docstr_all_commands.items() if k in commands]
     )
 
-    args.use_cache = True
-    get_and_parse_final_results(args)
+    print(len(docstr_commands))
+
+    if not args.use_cache:
+        if len(radon_commands) != 0:
+            get_radon_results(radon_commands, args.path, args.output_folder)
+        if len(flake8_commands) != 0:
+            get_flake8_results(flake8_commands, args.path, os.path.join(args.output_folder, "flake8.json"))
+        if len(docstr_commands) != 0:
+            get_docstr_results(args.path, os.path.join(args.output_folder, "docstr_results.txt"))
+
+    cc_data = dict()
+    if "cc" in radon_commands:
+        with open(os.path.join(args.output_folder, "radon_cc_results.json"), "r") as f:
+            cc_data.update(json.loads(f.read()))
+
+    raw_data = dict()
+    if "raw" in radon_commands:
+        with open(os.path.join(args.output_folder, "radon_raw_results.json"), "r") as f:
+            raw_data.update(json.loads(f.read()))
+
+    flake8_data = dict()
+    if len(flake8_commands) != 0:
+        with open(os.path.join(args.output_folder, "flake8.json"), "r") as f:
+            flake8_data.update(json.loads(f.read()))
+    docstrings_data = ""
+    if len(docstr_commands) != 0:
+        with open(os.path.join(args.output_folder, "docstr_results.txt"), "r") as f:
+            docstrings_data += f.read()
+
+    data = (cc_data, raw_data, flake8_data, docstrings_data, os.path.abspath(args.path))
+
+    if score_only:
+        stats = mi_p.MIChartParser.MIRawData(*data).mi_s()
+        score = stats.mi
+        print(stats)
+        print(score)
+        exit(score > 0.9)
+    else:
+        if "mi" in commands:
+            print(len(data))
+            mi_p.MIPreview().present(
+                data=data,
+                save=args.save,
+                output_folder=args.output_folder,
+            )
+            args.use_cache = True
+        get_and_parse_final_results(args)
 
 
 if __name__ == "__main__":
@@ -272,4 +329,6 @@ if __name__ == "__main__":
     elif args.tool == "docstr-coverage":
         get_and_parse_docstr_results(args)
     elif args.tool == "final":
-        get_and_parse_final_results_with_mi(args)
+        get_and_parse_final_results_with_mi(args, False)
+    elif args.tool == "mi_score":
+        get_and_parse_final_results_with_mi(args, True)
