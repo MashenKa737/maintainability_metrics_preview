@@ -242,7 +242,7 @@ def radon_cc_parser_function(data: dict):
 
     for filename in data.keys():
         for entity in data[filename]:
-            if entity["type"] != "function":
+            if entity["type"] == "class":
                 continue
             complexities.append(entity["complexity"])
             cc_info.append(cc_label(filename, entity))
@@ -691,8 +691,8 @@ def multimetric_parse_metric(
     return labels, values
 
 
-def flake8_mccabe_parser(data: dict):
-    def mccabe_extract(*args):
+def flake8_cc_parser(data: dict, code: str):
+    def cc_extract(*args):
         entry = args[0]
         text = entry["text"]
         pattern = r"'(.*)' is too complex \((.*)\)"
@@ -701,7 +701,38 @@ def flake8_mccabe_parser(data: dict):
         extra_label = f"value: {value}\n" + f"function: {match[0]}"
         return value, extra_label
 
-    return flake8_parser(data, "C901", mccabe_extract)
+    return flake8_parser(data, code, cc_extract)
+
+
+def flake8_mccabe_parser(data: dict):
+    return flake8_cc_parser(data, "C901")
+
+
+def flake8_radon_parser(data: dict):
+    return flake8_cc_parser(data, "R701")
+
+
+def flake8_radon_preview(data: dict, save_output: str = None):
+    values, labels = flake8_radon_parser(data)
+    fig, ax = plt.subplots(
+        num="Flake8 Radon Cyclomatic Complexity",
+        figsize=(12, 3),
+        frameon=True,
+        layout="constrained",
+    )
+    make_bar(
+        fig,
+        ax,
+        values=values,
+        labels=labels,
+        title="Cyclomatic Complexity",
+        xlabel="Functions",
+        ylabel="Complexity",
+    )
+    add_statistics(values, ax)
+    add_limits(limits=cm.cc_limits, values=values, ax=ax)
+    make_plot_description(f"Functions count: {len(labels)}")
+    save_or_show(save_output, "flake8_radon.png")
 
 
 def flake8_mccabe_preview(data: dict, save_output: str = None):
