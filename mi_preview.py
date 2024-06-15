@@ -152,7 +152,7 @@ class MIPreview(rp.DataPreview):
 
     def present(self, data, save: bool, output_folder: str):
         values, labels, total = self._charts[0][1].parse(data)
-        self.make_chart(0, values=np.array(values) - 1.0, labels=labels, bottom=1.0)
+        self.make_chart(0, values=np.array(values) - 1.005, labels=labels, bottom=1.005)
         self.add_statistics(0, values)
         self.make_chart_description(
             0,
