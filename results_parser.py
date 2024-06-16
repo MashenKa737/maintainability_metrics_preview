@@ -5,8 +5,12 @@ import matplotlib.pyplot as plt
 import numpy as np
 import re
 
+import calculate_mi as cm
 
-def make_bar(fig, ax, values: list, labels: list, title: str, xlabel: str, ylabel: str, bottom=0.0):
+
+def make_bar(
+    fig, ax, values: list, labels: list, title: str, xlabel: str, ylabel: str, bottom=0.0, show_first=True
+):
     return make_stacked_bars(
         fig,
         ax,
@@ -17,7 +21,7 @@ def make_bar(fig, ax, values: list, labels: list, title: str, xlabel: str, ylabe
         xlabel=xlabel,
         ylabel=ylabel,
         bottom=bottom,
-        show_first=True,
+        show_first=show_first,
     )
 
 
@@ -44,7 +48,7 @@ def make_stacked_bars(
     for bar_values, category in zip(values, categories):
         plt_bars.append(
             ax.bar(
-                x=labels,
+                x=range(len(labels)),
                 height=bar_values,
                 align="edge",
                 picker=True,  # show bar annotation on the pick event
@@ -103,17 +107,53 @@ def make_stacked_bars(
     return plt_bars
 
 
-def add_statistics(values: list, ax: plt.Axes, loc="upper right"):
+def add_statistics(values: list, ax: plt.Axes, loc="lower right"):
     max_v = np.max(values)
-    median_v = np.median(values)
-    average_v = np.average(values)
     min_v = np.min(values)
 
     l_max = ax.axhline(max_v, ls=":", color="red", label=f"max={max_v}")
     l_min = ax.axhline(min_v, ls="-", color="blue", label=f"min={min_v}")
-    l_med = ax.axhline(median_v, ls="-.", color="orange", label=f"median={median_v}")
-    l_ave = ax.axhline(average_v, ls="--", color="green", label=f"average={average_v}")
-    legend = ax.legend(handles=[l_max, l_min, l_med, l_ave], loc=loc, fontsize="small", framealpha=0.5)
+
+    legend = ax.legend(handles=[l_max, l_min], loc=loc, fontsize="small", framealpha=0.5)
+    ax.add_artist(legend)
+
+
+import matplotlib.patches as mpatches
+
+
+def add_limits(limits: cm.Limits, values: list, ax: plt.Axes, loc="center right"):
+    stats = limits.get_stats(values)
+    ax.autoscale(
+        enable=False,
+        axis="y",
+    )
+    ax.set_facecolor("silver")
+    ld = mpatches.Patch(
+        color="silver", label=f"dead [< {limits.bad.left}], [> {limits.bad.right}]: {stats.dead}"
+    )
+    lb = ax.axhspan(
+        limits.bad.left,
+        limits.bad.right,
+        zorder=-100,
+        facecolor="salmon",
+        label=f"bad ({limits.bad.left}, {limits.bad.right}): {stats.bad}",
+    )
+    lt = ax.axhspan(
+        limits.tolerant.left,
+        limits.tolerant.right,
+        zorder=-100,
+        facecolor="wheat",
+        label=f"tolerant ({limits.tolerant.left}, {limits.tolerant.right}): {stats.tolerant}",
+    )
+    lg = ax.axhspan(
+        limits.good.left,
+        limits.good.right,
+        zorder=-100,
+        facecolor="white",
+        label=f"good ({limits.good.left}, {limits.good.right}): {stats.good}",
+    )
+
+    legend = ax.legend(handles=[lg, lt, lb, ld], loc=loc, fontsize="small", framealpha=0.5)
     ax.add_artist(legend)
 
 
@@ -143,20 +183,28 @@ def sort(values: list, labels: list, reverse=True):
     return zip(*values_and_labels)
 
 
-def radon_cc_parser(data: dict, save_output: str = None):
+def cc_label(filename: str, entity: dict):
+    return (
+        f'name: {entity["name"]}\n'
+        + f'type: {entity["type"]}\n'
+        + f'rank: {entity["rank"]}\n'
+        + f'complexity: {entity["complexity"]}\n'
+        + f"filename: {filename}"
+    )
+
+
+def radon_cc_parser(data: dict):
     complexities = []
     cc_info = []
     for filename in data.keys():
         for entity in data[filename]:
             complexities.append(entity["complexity"])
-            cc_info.append(
-                f'name: {entity["name"]}\n'
-                f'type: {entity["type"]}\n'
-                f'rank: {entity["rank"]}\n'
-                f'complexity: {entity["complexity"]}\n'
-                f"filename: {filename}"
-            )
-    complexities, cc_info = sort(complexities, cc_info)
+            cc_info.append(cc_label(filename, entity))
+    return sort(complexities, cc_info)
+
+
+def radon_cc_preview(data: dict, save_output: str = None):
+    complexities, cc_info = radon_cc_parser(data)
     fig, ax = plt.subplots(
         num="Radon Cyclomatic Complexity Aggregate", figsize=(12, 3), frameon=True, layout="constrained"
     )
@@ -171,35 +219,90 @@ def radon_cc_parser(data: dict, save_output: str = None):
     )
     make_plot_description(f"Total blocks count: {len(cc_info)}")
     add_statistics(complexities, ax)
+    add_limits(cm.cc_limits, complexities, ax)
     save_or_show(save_output, "radon_cc.png")
 
 
-def radon_cc_parser_distinct(data: dict, save_output: str = None):
-    complexities_funcs = []
-    cc_info_funcs = []
-
-    complexities_classes = []
-    cc_info_classes = []
+def radon_cc_parser_class(data: dict):
+    complexities = []
+    cc_info = []
 
     for filename in data.keys():
         for entity in data[filename]:
-            complexities, cc_info = (
-                (complexities_classes, cc_info_classes)
-                if entity["type"] == "class"
-                else (complexities_funcs, cc_info_funcs)
-            )
-
+            if entity["type"] != "class":
+                continue
             complexities.append(entity["complexity"])
-            cc_info.append(
-                f'name: {entity["name"]}\n'
-                f'type: {entity["type"]}\n'
-                f'rank: {entity["rank"]}\n'
-                f'complexity: {entity["complexity"]}\n'
-                f"filename: {filename}"
-            )
-    complexities_funcs, cc_info_funcs = sort(complexities_funcs, cc_info_funcs)
-    complexities_classes, cc_info_classes = sort(complexities_classes, cc_info_classes)
+            cc_info.append(cc_label(filename, entity))
+    return sort(complexities, cc_info)
 
+
+def radon_cc_parser_function(data: dict):
+    complexities = []
+    cc_info = []
+
+    for filename in data.keys():
+        for entity in data[filename]:
+            if entity["type"] == "class":
+                continue
+            complexities.append(entity["complexity"])
+            cc_info.append(cc_label(filename, entity))
+    return sort(complexities, cc_info)
+
+
+def radon_cc_func_chart(fig: plt.Figure, ax: plt.Axes, data: dict):
+    complexities_funcs, cc_info_funcs = radon_cc_parser_function(data)
+    make_bar(
+        fig,
+        ax,
+        values=complexities_funcs,
+        labels=cc_info_funcs,
+        title="Cyclomatic complexity per function",
+        xlabel="Functions",
+        ylabel="Complexity",
+    )
+    make_plot_description(f"Total functions count: {len(cc_info_funcs)}")
+    add_statistics(complexities_funcs, ax)
+    add_limits(cm.cc_limits, complexities_funcs, ax)
+
+
+def radon_cc_class_chart(fig: plt.Figure, ax: plt.Axes, data: dict):
+    complexities_classes, cc_info_classes = radon_cc_parser_class(data)
+    make_bar(
+        fig,
+        ax,
+        values=complexities_classes,
+        labels=cc_info_classes,
+        title="Cyclomatic complexity per class",
+        xlabel="Classes",
+        ylabel="Complexity",
+    )
+    make_plot_description(f"Total classes count: {len(cc_info_classes)}")
+    add_statistics(complexities_classes, ax)
+
+
+def radon_cc_func_preview(data: dict, save_output: str = None):
+    fig, ax = plt.subplots(
+        num="Radon Cyclomatic Complexity",
+        figsize=(10, 5),
+        frameon=True,
+        layout="constrained",
+    )
+    radon_cc_func_chart(fig, ax, data)
+    save_or_show(save_output, "radon_cc_files.png")
+
+
+def radon_cc_class_preview(data: dict, save_output: str = None):
+    fig, ax = plt.subplots(
+        num="Radon Cyclomatic Complexity",
+        figsize=(10, 5),
+        frameon=True,
+        layout="constrained",
+    )
+    radon_cc_class_chart(fig, ax, data)
+    save_or_show(save_output, "radon_cc_classes.png")
+
+
+def radon_cc_distinct_preview(data: dict, save_output: str = None):
     fig = plt.figure(
         "Radon Cyclomatic Complexity",
         figsize=(10, 5),
@@ -207,30 +310,10 @@ def radon_cc_parser_distinct(data: dict, save_output: str = None):
         layout="constrained",
     )
     ax1 = plt.subplot(2, 1, 1)
-    make_bar(
-        fig,
-        ax1,
-        values=complexities_funcs,
-        labels=cc_info_funcs,
-        title="Cyclomatic complexity per function",
-        xlabel="Functions",
-        ylabel="Complexity",
-    )
-    make_plot_description(f"Total blocks count: {len(cc_info_funcs)}")
-    add_statistics(complexities_funcs, ax1)
+    radon_cc_func_chart(fig, ax1, data)
 
     ax2 = plt.subplot(2, 1, 2)
-    make_bar(
-        fig,
-        ax2,
-        values=complexities_classes,
-        labels=cc_info_classes,
-        title="Cyclomatic complexity per class",
-        xlabel="Classes",
-        ylabel="Complexity",
-    )
-    make_plot_description(f"Total blocks count: {len(cc_info_classes)}")
-    add_statistics(complexities_classes, ax2)
+    radon_cc_class_chart(fig, ax2, data)
     save_or_show(save_output, "radon_cc_distinct.png")
 
 
@@ -295,15 +378,9 @@ def radon_hal_parser(data: dict, save_output: str = None):
     save_or_show(save_output, "radon_halstead.png")
 
 
-def radon_raw_parser(data: dict, save_output: str = None):
+def radon_raw_aggregate_parser(data: dict):
     first_chart_keys = ["loc", "sloc", "single_comments", "multi", "blank"]
     first_chart_values = []
-
-    lloc = []
-    lloc_labels = []
-
-    comments = []
-    comments_labels = []
 
     files = list(data.keys())
 
@@ -311,16 +388,13 @@ def radon_raw_parser(data: dict, save_output: str = None):
         entity = data[filename]
         label = f"filename: {filename}\n" + "\n".join([f"{key}: {value}" for key, value in entity.items()])
         first_chart_values.append(tuple(entity[k] for k in first_chart_keys) + (label,))
-        lloc.append(entity["lloc"])
-        lloc_labels.append(label)
-        comments.append(entity["comments"])
-        comments_labels.append(label)
 
-    first_chart_values = sorted(first_chart_values, reverse=True)
+    return sorted(first_chart_values, reverse=True)
+
+
+def radon_raw_aggregate_preview(data: dict, save_output: str = None):
+    first_chart_values = radon_raw_aggregate_parser(data)
     loc, sloc, oneline_strings, multiline_strings, blank, first_chart_labels = zip(*first_chart_values)
-
-    lloc, lloc_labels = sort(lloc, lloc_labels)
-    comments, comments_labels = sort(comments, comments_labels)
 
     fig, ax = plt.subplots(
         num="Radon Statistics Aggregate", figsize=(10, 5), frameon=True, layout="constrained"
@@ -336,52 +410,113 @@ def radon_raw_parser(data: dict, save_output: str = None):
             "multiline docstrings",
             "blank",
         ),
-        title="Radon LOC",
+        title="LOC Statistics",
         xlabel="files",
         ylabel="lines of code",
         bottom=-1,
     )
     add_statistics(loc, ax, loc="lower right")
+    add_limits(cm.loc_file_limits, loc, ax, loc="center right")
     ax.legend(handles=bs, loc="upper right")
 
     make_plot_description(
-        f"Total files count: {len(files)}\n"
+        f"Total files count: {len(first_chart_values)}\n"
         f"LOC: {sum(loc)}\n"
         f"SLOC: {sum(sloc)}\n"
         f"Oneline comments and docstrings: {sum(oneline_strings)}\n"
         f"Multiline docstrings: {sum(multiline_strings)}\n"
         f"Blank: {sum(blank)}"
     )
-    save_or_show(save_output, "radon_LOC_statistics.png")
+    save_or_show(save_output, "radon_statistics_aggregate.png")
 
-    fig = plt.figure("Radon Statistics", figsize=(10, 5), frameon=True, layout="constrained")
-    ax1 = plt.subplot(2, 1, 1)
+
+def radon_raw_distinct_parser(data: dict):
+    data_distinct = []
+
+    for filename, entity in data.items():
+        label = f"filename: {filename}\n" + "\n".join([f"{key}: {value}" for key, value in entity.items()])
+        data_distinct.append(
+            (
+                label,
+                entity["sloc"],
+                entity["lloc"],
+                entity["single_comments"],
+                entity["multi"],
+                entity["comments"],
+            )
+        )
+    return data_distinct
+
+
+def radon_raw_distinct_preview(data: dict, save_output: str = None):
+    data_distinct = radon_raw_distinct_parser(data)
+    sloc, sloc_labels = zip(*sorted([(e[1], e[0]) for e in data_distinct], reverse=True))
+    lloc, lloc_labels = zip(*sorted([(e[2], e[0]) for e in data_distinct], reverse=True))
+    doc, doc_labels = zip(*sorted([(e[3] + e[4], e[0]) for e in data_distinct]))
+    comments, comments_labels = zip(*sorted([(e[5], e[0]) for e in data_distinct]))
+
+    fig = plt.figure("Radon Statistics", figsize=(16, 8), frameon=True, layout="constrained")
+    ax1 = plt.subplot(2, 2, 1)
     make_bar(
         fig,
         ax1,
-        labels=lloc_labels,
-        values=np.array(lloc) + 1,
-        title="Radon Logical lines of code",
+        labels=sloc_labels,
+        values=np.array(sloc) + 1,
+        title="Source lines of code",
         xlabel="files",
         ylabel="lines of code",
         bottom=-1,
     )
-    add_statistics(lloc, ax1)
-    make_plot_description(f"Total files count: {len(files)}\n" f"LLOC: {sum(lloc)}")
-    ax2 = plt.subplot(2, 1, 2)
+    add_statistics(sloc, ax1)
+    make_plot_description(f"SLOC: {sum(sloc)}")
+
+    ax2 = plt.subplot(2, 2, 2)
     make_bar(
         fig,
         ax2,
-        labels=comments_labels,
-        values=np.array(comments) + 1,
-        title="Radon Comments `#`",
+        labels=lloc_labels,
+        values=np.array(lloc) + 1,
+        title="Logical lines of code",
         xlabel="files",
         ylabel="lines of code",
         bottom=-1,
     )
-    add_statistics(comments, ax2)
-    make_plot_description(f"Total files count: {len(files)}\n" f"Comments: {sum(comments)}\n")
-    save_or_show(save_output, "radon_other_statistics.png")
+    add_statistics(lloc, ax2)
+    make_plot_description(f"LLOC: {sum(lloc)}")
+
+    ax3 = plt.subplot(2, 2, 3)
+    make_bar(
+        fig,
+        ax3,
+        labels=comments_labels,
+        values=np.array(comments) + 1,
+        title="Comments `#`",
+        xlabel="files",
+        ylabel="lines of code",
+        bottom=-1,
+    )
+    add_statistics(comments, ax3)
+    make_plot_description(f"Comments: {sum(comments)}")
+
+    ax4 = plt.subplot(2, 2, 4)
+    make_bar(
+        fig,
+        ax4,
+        labels=doc_labels,
+        values=np.array(doc) + 1,
+        title="Docstrings (and oneline comments)",
+        xlabel="files",
+        ylabel="lines of code",
+        bottom=-1,
+    )
+    add_statistics(comments, ax4)
+    make_plot_description(f"Docstrings: {sum(doc)}")
+    save_or_show(save_output, "radon_distinct_statistics.png")
+
+
+def radon_raw_parser(data: dict, save_output: str = None):
+    radon_raw_aggregate_preview(data, save_output)
+    radon_raw_distinct_preview(data, save_output)
 
 
 def radon_mi_parser(data: dict, save_output: str = None):
@@ -556,8 +691,8 @@ def multimetric_parse_metric(
     return labels, values
 
 
-def flake8_mccabe_parser(data: dict, save_output: str = None):
-    def mccabe_extract(*args):
+def flake8_cc_parser(data: dict, code: str):
+    def cc_extract(*args):
         entry = args[0]
         text = entry["text"]
         pattern = r"'(.*)' is too complex \((.*)\)"
@@ -566,7 +701,42 @@ def flake8_mccabe_parser(data: dict, save_output: str = None):
         extra_label = f"value: {value}\n" + f"function: {match[0]}"
         return value, extra_label
 
-    values, labels = flake8_parser(data, "C901", mccabe_extract)
+    return flake8_parser(data, code, cc_extract)
+
+
+def flake8_mccabe_parser(data: dict):
+    return flake8_cc_parser(data, "C901")
+
+
+def flake8_radon_parser(data: dict):
+    return flake8_cc_parser(data, "R701")
+
+
+def flake8_radon_preview(data: dict, save_output: str = None):
+    values, labels = flake8_radon_parser(data)
+    fig, ax = plt.subplots(
+        num="Flake8 Radon Cyclomatic Complexity",
+        figsize=(12, 3),
+        frameon=True,
+        layout="constrained",
+    )
+    make_bar(
+        fig,
+        ax,
+        values=values,
+        labels=labels,
+        title="Cyclomatic Complexity",
+        xlabel="Functions",
+        ylabel="Complexity",
+    )
+    add_statistics(values, ax)
+    add_limits(limits=cm.cc_limits, values=values, ax=ax)
+    make_plot_description(f"Functions count: {len(labels)}")
+    save_or_show(save_output, "flake8_radon.png")
+
+
+def flake8_mccabe_preview(data: dict, save_output: str = None):
+    values, labels = flake8_mccabe_parser(data)
     fig, ax = plt.subplots(
         num="Flake8 Mccabe complexity",
         figsize=(12, 3),
@@ -578,16 +748,17 @@ def flake8_mccabe_parser(data: dict, save_output: str = None):
         ax,
         values=values,
         labels=labels,
-        title="Flake8 Mccabe complexity",
+        title="Mccabe complexity",
         xlabel="Functions",
         ylabel="Complexity",
     )
     add_statistics(values, ax)
+    add_limits(limits=cm.cc_limits, values=values, ax=ax)
     make_plot_description(f"Functions count: {len(labels)}")
     save_or_show(save_output, "flake8_mccabe.png")
 
 
-def flake8_cognitive_parser(data: dict, save_output: str = None):
+def flake8_cognitive_parser(data: dict):
     def cognitive_extract(*args):
         entry = args[0]
         text = entry["text"]
@@ -597,7 +768,12 @@ def flake8_cognitive_parser(data: dict, save_output: str = None):
         extra_label = f"value: {value}"
         return value, extra_label
 
-    values, labels = flake8_parser(data, "CCR001", cognitive_extract)
+    return flake8_parser(data, "CCR001", cognitive_extract)
+
+
+def flake8_cognitive_preview(data: dict, save_output: str = None):
+    values, labels = flake8_cognitive_parser(data)
+
     fig, ax = plt.subplots(
         num="Flake8 Cognitive complexity",
         figsize=(12, 3),
@@ -607,19 +783,57 @@ def flake8_cognitive_parser(data: dict, save_output: str = None):
     make_bar(
         fig,
         ax,
-        values=np.array(values) + 0.1,
+        values=np.array(values) + 1,
         labels=labels,
-        title="Flake8 Cognitive complexity",
+        title="Cognitive complexity",
         xlabel="Functions",
         ylabel="Complexity",
-        bottom=-0.1,
+        bottom=-1,
     )
     add_statistics(values, ax)
+    add_limits(limits=cm.cognitive_limits, values=values, ax=ax)
     make_plot_description(f"Functions count: {len(labels)}")
     save_or_show(save_output, "flake8_cognitive.png")
 
 
-def flake8_parser(data: dict, code: str, specific_extract: callable):
+def flake8_cohesion_parser(data: dict):
+    def cohesion_extract(*args):
+        entry = args[0]
+        text = entry["text"]
+        pattern = r"class has low \((.*)\%\) cohesion"
+        match = re.fullmatch(pattern, text).groups()
+        value = float(match[0])
+        extra_label = f"value: {value}"
+        return value, extra_label
+
+    return flake8_parser(data, "H601", cohesion_extract, reverse=False)
+
+
+def flake8_cohesion_preview(data: dict, save_output: str = None):
+    values, labels = flake8_cohesion_parser(data)
+    fig, ax = plt.subplots(
+        num="Flake8 Cohesion",
+        figsize=(10, 5),
+        frameon=True,
+        layout="constrained",
+    )
+    make_bar(
+        fig,
+        ax,
+        values=np.array(values) - 101.0,
+        labels=labels,
+        title="Cohesion",
+        xlabel="Classes",
+        ylabel="Percentage",
+        bottom=101.0,
+    )
+    add_statistics(values, ax)
+    add_limits(limits=cm.cohesion_limits, values=values, ax=ax)
+    make_plot_description(f"Classes count: {len(labels)}")
+    save_or_show(save_output, "flake8_cohesion.png")
+
+
+def flake8_parser(data: dict, code: str, specific_extract: callable, reverse=True):
     files = [k for k in data.keys() if data[k]]
     values = []
     labels = []
@@ -629,18 +843,32 @@ def flake8_parser(data: dict, code: str, specific_extract: callable):
                 continue
             extract = specific_extract(entry)
             value = extract[0]
+            extra_value = extract[1]
             values.append(value)
-            labels.append(
-                f"file: {file}\n"
-                f"{extract[1]}\n"
-                f"line: {entry['line_number']}\n"
-                f"physical line: {textwrap.shorten(entry['physical_line'].strip(), width=40, placeholder='...')}"
+            physical_line = entry["physical_line"].strip()
+            sp_value = ""
+            func_match = re.search(r"def (.*)\(", physical_line)
+            class_match = re.search(r"class (.*):", physical_line)
+            if func_match:
+                sp_value = f"function: {func_match.group(1)}\n"
+            elif class_match:
+                sp_value = f"class: {class_match.group(1)}\n"
+
+            description = "physical line: " + textwrap.shorten(
+                physical_line, break_on_hyphens=True, width=40, placeholder="..."
             )
-    values, labels = sort(values, labels)
+            labels.append(
+                sp_value
+                + f"file: {file}\n"
+                + f"{extra_value}\n"
+                + f"line: {entry['line_number']}\n"
+                + description
+            )
+    values, labels = sort(values, labels, reverse=reverse)
     return values, labels
 
 
-def docstr_parser(text: str, path: str, save_output: str = None):
+def docstr_parser(text: str, path: str):
     pattern = r'File: "(.*)"\n Needed: (.*); Found: (.*); Missing: (.*); Coverage: (.*)%'
     data = []
     for match in re.findall(pattern, text):
@@ -665,10 +893,13 @@ def docstr_parser(text: str, path: str, save_output: str = None):
             }
         )
     stats = text.split("Overall statistics for ", 1)[1]
+    return data, stats
 
+
+def docstr_preview(text: str, path: str, save_output: str = None):
+    data, stats = docstr_parser(text, path)
     data1 = sorted(data, key=lambda e: e["missing"], reverse=True)
     data2 = sorted(data, key=lambda e: e["coverage"])
-
     labels1, found, missing = zip(*[(e["label"], e["found"], e["missing"]) for e in data1])
     labels2, coverage = zip(*[(e["label"], e["coverage"]) for e in data2])
 
@@ -688,7 +919,7 @@ def docstr_parser(text: str, path: str, save_output: str = None):
         xlabel="files",
         ylabel="docstrings",
         bottom=-1,
-        annotate_index=0
+        annotate_index=0,
     )
     add_statistics(missing, ax1, loc="lower right")
     ax1.legend(handles=bs, loc="upper right", framealpha=0.5)
@@ -696,7 +927,7 @@ def docstr_parser(text: str, path: str, save_output: str = None):
     make_bar(
         fig,
         ax2,
-        values= np.array(coverage)-101.0,
+        values=np.array(coverage) - 101.0,
         labels=labels2,
         title="Docstring coverage per file",
         xlabel="files",
@@ -704,7 +935,7 @@ def docstr_parser(text: str, path: str, save_output: str = None):
         bottom=101.0,
     )
     add_statistics(coverage, ax2, loc="lower right")
+    add_limits(ax=ax2, limits=cm.docstr_coverage_limits, values=coverage)
 
-    make_plot_description(f"Files processed: {len(data)}\nTotal: " + stats.strip())
+    make_plot_description(f"Files processed: {len(data1)}\nTotal: " + stats.strip())
     save_or_show(save_output, "docstring_coverage.png")
-

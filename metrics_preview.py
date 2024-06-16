@@ -6,6 +6,7 @@ import sys
 
 import json
 import results_parser as rp
+import mi_preview as mi_p
 
 
 def setup_arguments():
@@ -35,6 +36,14 @@ def setup_arguments():
         action="store_true",
         help='If given, not start analysis, use results from "output_folder/project_name" folder',
     )
+    parser.add_argument(
+        "-e",
+        "--exclude",
+        required=False,
+        nargs="+",
+        help="Exclude files with path pattern from analysis",
+        default=[],
+    )
     subparsers = parser.add_subparsers(dest="tool", required=True, help="tool to inspect")
     radon_name = "radon"
     radon_parser = subparsers.add_parser(radon_name)
@@ -48,7 +57,7 @@ def setup_arguments():
 
     flake8_name = "flake8"
     flake8_parser = subparsers.add_parser(flake8_name)
-    flake8_commands = {"mccabe", "cognitive"}
+    flake8_commands = {"radon", "mccabe", "cognitive", "cohesion"}
     flake8_parser.add_argument(
         "--commands", "-c", choices=flake8_commands, nargs="+", default=flake8_commands
     )
@@ -56,31 +65,55 @@ def setup_arguments():
     docstr_name = "docstr-coverage"
     docstr_parser = subparsers.add_parser(docstr_name)
 
+    final_name = "final"
+    final_parser = subparsers.add_parser(final_name)
+    final_commands = {"mi", "loc", "cc", "cog", "coh", "doc"}
+    final_parser.add_argument("--commands", "-c", choices=final_commands, nargs="+", default=final_commands)
+
+    score_name = "mi_score"
+    mi_score_parser = subparsers.add_parser(score_name)
+    mi_score_parser.add_argument("threshold", type=float, help="Minimum allowed mi_score to fail under")
+
     p_args = parser.parse_args()
 
     current_path = os.path.abspath(os.getcwd())
-    if p_args.output_folder:
-        p_args.output_folder = os.path.abspath(p_args.output_folder)
-    else:
-        p_args.output_folder = current_path
-        if p_args.project_name:
-            p_args.output_folder = os.path.join(p_args.output_folder, p_args.project_name)
+    p_args.output_folder = os.path.abspath(p_args.output_folder) if p_args.output_folder else current_path
+    if p_args.project_name:
+        p_args.output_folder = os.path.join(p_args.output_folder, p_args.project_name)
     if not os.path.exists(p_args.output_folder):
         os.makedirs(p_args.output_folder)
 
     if hasattr(p_args, "commands"):
         p_args.commands = sorted(set(p_args.commands))
+    else:
+        p_args.commands = []
 
     return p_args
 
 
-def get_radon_results(commands: list, project_path: str, output_folder: str):
+def read_dict(file: str):
+    with open(file, "r") as f:
+        return json.loads(f.read())
+
+
+def read_text(file: str):
+    with open(file, "r") as f:
+        return f.read()
+
+
+def radon_out_file(command: str, output_folder: str):
+    return os.path.join(output_folder, f"radon_{command}_results.json")
+
+
+def get_radon_results(commands: list, project_path: str, output_folder: str, exclude: list):
+    i_f_args = ["-e", ",".join(exclude)] if exclude else []
+    # print(i_f_args)
     for command in commands:
-        result_file = os.path.join(output_folder, f"radon_{command}_results.json")
+        result_file = radon_out_file(command, output_folder)
         subprocess.Popen(
-            [
-                "radon",
-                command,
+            ["radon", command]
+            + i_f_args
+            + [
                 "./",
                 "-j",
                 "--output-file",
@@ -93,25 +126,48 @@ def get_radon_results(commands: list, project_path: str, output_folder: str):
     print("radon results done")
 
 
-def get_and_parse_radon_results(args):
-    radon_commands = args.commands
-    if not args.use_cache:
-        get_radon_results(radon_commands, args.path, args.output_folder)
+def parse_radon_results(commands, output_folder, save, raw_distinct=None, cc_charts=["func", "class"]):
+    radon_raw_parser = rp.radon_raw_parser
+    if raw_distinct is not None:
+        if raw_distinct:
+            radon_raw_parser = rp.radon_raw_distinct_preview
+        else:
+            radon_raw_parser = rp.radon_raw_aggregate_preview
+    radon_cc_parser = rp.radon_cc_preview
+    if "func" in cc_charts and "class" in cc_charts:
+        radon_cc_parser = rp.radon_cc_distinct_preview
+    elif "func" in cc_charts:
+        radon_cc_parser = rp.radon_cc_func_preview
+    elif "class" in cc_charts:
+        radon_cc_parser = rp.radon_cc_class_preview
+
     radon_parsers = {
-        "raw": rp.radon_raw_parser,
-        "cc": rp.radon_cc_parser_distinct,
+        "raw": radon_raw_parser,
+        "cc": radon_cc_parser,
         "hal": rp.radon_hal_parser,
         "mi": rp.radon_mi_parser,
     }
-    for command in radon_commands:
+    for command in commands:
         parser = radon_parsers[command]
-        result_file = os.path.join(args.output_folder, f"radon_{command}_results.json")
-        with open(result_file, "r") as f:
-            parser(
-                json.loads(f.read()),
-                save_output=args.output_folder if args.save else None,
-            )
-            print(f"radon {command} charts done")
+        result_file = radon_out_file(command, output_folder)
+        data = read_dict(result_file)
+        parser(
+            data,
+            save_output=output_folder if save else None,
+        )
+        print(f"radon {command} charts done")
+
+
+def get_and_parse_radon_results(args):
+    radon_commands = args.commands
+    if not args.use_cache:
+        get_radon_results(radon_commands, args.path, args.output_folder, args.exclude)
+    parse_radon_results(commands=radon_commands, save=args.save, output_folder=args.output_folder)
+
+
+def get_and_parse_multimetric_results(args):
+    if not args.use_cache:
+        get_multimetric_results(args.path, args.output_folder)
 
 
 def get_multimetric_results(path: str, output_folder: str):
@@ -124,9 +180,7 @@ def get_multimetric_results(path: str, output_folder: str):
         subprocess.Popen(["multimetric", *source_files], stdout=out, stderr=err).communicate()
 
 
-def get_and_parse_multimetric_results(args):
-    if not args.use_cache:
-        get_multimetric_results(args.path, args.output_folder)
+def parse_multimetric_results(args):
     mm_parsers = {
         "raw": rp.mm_raw_parser,
         "cc": rp.mm_cc_parser,
@@ -134,70 +188,185 @@ def get_and_parse_multimetric_results(args):
         "mi": rp.mm_mi_parser,
     }
     result_file = os.path.join(args.output_folder, "multimetric.json")
-    with open(result_file, "r") as f:
-        data = json.loads(f.read())
-        for command in args.commands:
-            mm_parsers[command](
-                data, path=os.path.abspath(args.path), save_output=args.output_folder if args.save else None
-            )
+    data = read_dict(result_file)
+    for command in args.commands:
+        mm_parsers[command](
+            data, path=os.path.abspath(args.path), save_output=args.output_folder if args.save else None
+        )
+        print(f"multimetric {command} charts done")
+
+
+def flake8_out_file(output_folder):
+    return os.path.join(output_folder, "flake8.json")
 
 
 def get_and_parse_flake8_results(args):
-    flake8_commands = args.commands
-    out = os.path.join(args.output_folder, "flake8.json")
+    out = flake8_out_file(args.output_folder)
     if not args.use_cache:
-        get_flake8_results(flake8_commands, args.path, out)
-
-    flake8_parsers = {"mccabe": rp.flake8_mccabe_parser, "cognitive": rp.flake8_cognitive_parser}
-    with open(out, "r") as f:
-        data = json.loads(f.read())
-        for command in flake8_commands:
-            flake8_parsers[command](data, save_output=args.output_folder if args.save else None)
+        get_flake8_results(args.commands, args.path, out, args.exclude)
+    parse_flake8_results(args.commands, args.output_folder, args.save)
 
 
-def get_flake8_results(commands, path: str, out: str):
-    codes = {"mccabe": "C901", "cognitive": "CCR001"}
+def parse_flake8_results(commands, output_folder, save):
+    flake8_parsers = {
+        "radon": rp.flake8_radon_preview,
+        "mccabe": rp.flake8_mccabe_preview,
+        "cognitive": rp.flake8_cognitive_preview,
+        "cohesion": rp.flake8_cohesion_preview,
+    }
+    data = read_dict(flake8_out_file(output_folder))
+    for command in commands:
+        flake8_parsers[command](data, save_output=output_folder if save else None)
+        print(f"flake8 {command} charts done")
+
+
+def get_flake8_results(commands, path: str, out: str, exclude: list):
+    codes = {"radon": "R701", "mccabe": "C901", "cognitive": "CCR001", "cohesion": "H601"}
     arguments = {
+        "radon": ["--radon-max-cc", "0"],
         "mccabe": ["--max-complexity", "0"],
         "cognitive": ["--max-cognitive-complexity", "-1"],
+        "cohesion": ["--cohesion-below=100"],
     }
-    with open(out, "w"):
-        pass
-    subprocess.Popen(
-        [
-            "flake8",
-            "--format",
-            "json-pretty",
-            "--select=" + ",".join([codes[c] for c in commands]),
-            *[a for c in commands for a in arguments[c]],
-            "--output-file",
-            out,
-            ".",
-        ],
-        cwd=path,
-        stdout=sys.stdout,
-        stderr=sys.stderr,
-    ).communicate()
+    i_f_args = ["--exclude=" + ",".join(exclude)] if exclude else []
+    with open(out, "w") as f:
+        args = (
+            ["flake8"]
+            + i_f_args
+            + [
+                "--format",
+                "json-pretty",
+                "--select=" + ",".join([codes[c] for c in commands]),
+                *[a for c in commands for a in arguments[c]],
+                ".",
+            ]
+        )
+        # print(args)
+        subprocess.Popen(
+            args,
+            cwd=path,
+            stdout=f,
+            stderr=sys.stderr,
+        ).communicate()
+        print("flake8 results done")
 
 
-def get_docstr_results(project_path: str, out: str):
+def get_docstr_results(project_path: str, out: str, exclude: list):
+    exclude = [v.replace("*", ".*") for v in exclude]
+    i_f_args = ["--exclude=" + ",".join(exclude)] if exclude else []
     with open(out, "w") as out:
-        subprocess.Popen(["docstr-coverage", project_path, "-v", "2"], stdout=out, stderr=out).communicate()
+        subprocess.Popen(
+            ["docstr-coverage"] + i_f_args + [project_path, "-v", "2"], stdout=out, stderr=out
+        ).communicate()
     print("docstr-coverage results done")
 
 
+def parse_docstr_results(path, save, output_folder):
+    text = read_text(docstr_file_path(output_folder))
+    rp.docstr_preview(text, path=os.path.abspath(path), save_output=output_folder if save else None)
+    print("docstring charts done")
+
+
+def docstr_file_path(output_folder):
+    return os.path.join(output_folder, "docstr_results.txt")
+
+
 def get_and_parse_docstr_results(args):
-    out = os.path.join(args.output_folder, "docstr_results.txt")
+    out = docstr_file_path(args.output_folder)
     if not args.use_cache:
-        get_docstr_results(args.path, out)
-    with open(out, "r") as f:
-        text = f.read()
-        rp.docstr_parser(text, path=args.path)
+        get_docstr_results(args.path, out, args.exclude)
+    parse_docstr_results(args.path, args.save, args.output_folder)
+
+
+flake8_final_commands = {"cog": "cognitive", "coh": "cohesion"}
+radon_final_commands = {"loc": "raw", "cc": "cc"}
+docstr_final_commands = {"doc": ""}
+
+
+def choose_commands(specific: dict, commands: list):
+    return [v for k, v in specific.items() if k in commands]
+
+
+def parse_final_results(args):
+    commands = args.commands
+    radon_commands = choose_commands(radon_final_commands, commands)
+    flake8_commands = choose_commands(flake8_final_commands, commands)
+    docstr_commands = choose_commands(docstr_final_commands, commands)
+
+    if len(radon_commands) != 0:
+        args.commands = radon_commands
+        parse_radon_results(
+            commands=radon_commands,
+            output_folder=args.output_folder,
+            save=args.save,
+            raw_distinct=False,
+            cc_charts=["func"],
+        )
+    if len(flake8_commands) != 0:
+        args.commands = flake8_commands
+        parse_flake8_results(commands=flake8_commands, output_folder=args.output_folder, save=args.save)
+    if len(docstr_commands) != 0:
+        args.commands = []
+        parse_docstr_results(path=args.path, save=args.save, output_folder=args.output_folder)
+
+
+def get_final_results(radon_commands, flake8_commands, docstr_commands, path, output_folder, exclude):
+    if len(radon_commands) != 0:
+        get_radon_results(radon_commands, path, output_folder, exclude)
+    if len(flake8_commands) != 0:
+        get_flake8_results(flake8_commands, path, flake8_out_file(output_folder), exclude)
+    if len(docstr_commands) != 0:
+        get_docstr_results(path, docstr_file_path(output_folder), exclude)
+
+
+def get_and_parse_final_results_with_mi(args, score_only):
+    commands = args.commands
+
+    ignore_commands = score_only or ("mi" in commands)
+    r_c = (
+        radon_final_commands.values() if ignore_commands else choose_commands(radon_final_commands, commands)
+    )
+    f_c = (
+        flake8_final_commands.values()
+        if ignore_commands
+        else choose_commands(flake8_final_commands, commands)
+    )
+    d_c = (
+        docstr_final_commands.values()
+        if ignore_commands
+        else choose_commands(docstr_final_commands, commands)
+    )
+
+    if not args.use_cache:
+        get_final_results(r_c, f_c, d_c, args.path, args.output_folder, args.exclude)
+
+    cc_data = read_dict(radon_out_file("cc", args.output_folder)) if "cc" in r_c else dict()
+    raw_data = read_dict(radon_out_file("raw", args.output_folder)) if "raw" in r_c else dict()
+    flake8_data = read_dict(flake8_out_file(args.output_folder)) if len(f_c) != 0 else dict()
+    docstrings_data = read_text(docstr_file_path(args.output_folder)) if len(d_c) != 0 else ""
+
+    data = (cc_data, raw_data, flake8_data, docstrings_data, os.path.abspath(args.path))
+
+    if score_only:
+        stats = mi_p.MIChartParser.MIRawData(*data).mi_s()
+        score = stats.mi
+        print(stats)
+        print(f"Maintainability score: {score}, threshold: {args.threshold}")
+        sys.exit(score < float(args.threshold))
+    else:
+        if "mi" in commands:
+            mi_p.MIPreview().present(
+                data=data,
+                save=args.save,
+                output_folder=args.output_folder,
+            )
+            args.use_cache = True
+        parse_final_results(args)
 
 
 if __name__ == "__main__":
     args = setup_arguments()
-    print(args)
+    # print(args)
     if args.tool == "radon":
         get_and_parse_radon_results(args)
     elif args.tool == "multimetric":
@@ -206,3 +375,7 @@ if __name__ == "__main__":
         get_and_parse_flake8_results(args)
     elif args.tool == "docstr-coverage":
         get_and_parse_docstr_results(args)
+    elif args.tool == "final":
+        get_and_parse_final_results_with_mi(args, False)
+    elif args.tool == "mi_score":
+        get_and_parse_final_results_with_mi(args, True)
