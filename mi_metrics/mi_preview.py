@@ -7,7 +7,10 @@ import preview.results_preview as rp
 
 
 def radon_cc_parser_function(data: dict):
-    cc_f = {f: [e["complexity"] for e in es if e["type"] == "function"] for f, es in data.items()}
+    cc_f = {
+        f: [e["complexity"] for e in es if e["type"] == "function"]
+        for f, es in data.items()
+    }
     return cc_f
 
 
@@ -47,8 +50,13 @@ def flake8_parser(data: dict, code: str, specific_extract: callable):
 
 
 def docstr_parser_file_percentage(text: str, path: str):
-    pattern = r'File: "(.*)"\n Needed: (.*); Found: (.*); Missing: (.*); Coverage: (.*)%'
-    return {m[0].removeprefix(path).removeprefix("/"): float(m[4]) for m in re.findall(pattern, text)}
+    pattern = (
+        r'File: "(.*)"\n Needed: (.*); Found: (.*); Missing: (.*); Coverage: (.*)%'
+    )
+    return {
+        m[0].removeprefix(path).removeprefix("/"): float(m[4])
+        for m in re.findall(pattern, text)
+    }
 
 
 def overall_coverage(coverage_data: str):
@@ -60,12 +68,16 @@ def overall_coverage(coverage_data: str):
 
 class MIChart(rp.DataChart):
     def __init__(self):
-        super().__init__(title="Maintainability score per file", xlabel="files", ylabel="ratio")
+        super().__init__(
+            title="Maintainability score per file", xlabel="files", ylabel="ratio"
+        )
 
 
 class MIChartParser(rp.ABSParser):
     class MIRawData:
-        def __init__(self, radon_cc_data, radon_raw_data, flake8_data, coverage_data, path):
+        def __init__(
+            self, radon_cc_data, radon_raw_data, flake8_data, coverage_data, path
+        ):
             cc_values_by_file = radon_cc_parser_function(radon_cc_data)
             raw_data_by_file = radon_raw_distinct_parser(radon_raw_data)
             cognitive_values_by_file = flake8_cognitive_parser(flake8_data)
@@ -76,9 +88,13 @@ class MIChartParser(rp.ABSParser):
             self.funcs_loc_values = []
             self.total_loc_values = sum(self.files_loc_values)
             self.cc_values = [v for vs in cc_values_by_file.values() for v in vs]
-            self.cognitive_values = [v for vs in cognitive_values_by_file.values() for v in vs]
+            self.cognitive_values = [
+                v for vs in cognitive_values_by_file.values() for v in vs
+            ]
             self.dup_lines = []
-            self.cohesion_values = [v for vs in cohesion_values_by_file.values() for v in vs]
+            self.cohesion_values = [
+                v for vs in cohesion_values_by_file.values() for v in vs
+            ]
             self.total_docstrings = overall_coverage(coverage_data)
 
             raw_set = set(raw_data_by_file.keys())

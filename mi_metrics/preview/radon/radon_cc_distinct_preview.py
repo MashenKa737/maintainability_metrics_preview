@@ -1,4 +1,4 @@
-from preview.results_preview import DataChart, DataPreview
+from mi_metrics.preview.results_preview import DataChart, DataPreview
 from .radon_cc_preview import RadonCCParser
 
 
@@ -21,13 +21,19 @@ class RadonCCParserFunction(RadonCCParser):
 class RadonCCFunctionsChart(DataChart):
     def __init__(self):
         super().__init__(
-            title="Radon Cyclomatic Complexity Per Function", xlabel="functions", ylabel="points"
+            title="Radon Cyclomatic Complexity Per Function",
+            xlabel="functions",
+            ylabel="points",
         )
 
 
 class RadonCCClassesChart(DataChart):
     def __init__(self):
-        super().__init__(title="Radon Cyclomatic Complexity Per Class", xlabel="classes", ylabel="points")
+        super().__init__(
+            title="Radon Cyclomatic Complexity Per Class",
+            xlabel="classes",
+            ylabel="points",
+        )
 
 
 class RadonDistinctPreview(DataPreview):
@@ -51,4 +57,3 @@ class RadonDistinctPreview(DataPreview):
             self.add_statistics(index, values)
 
         self.save_or_show(save, output_folder)
-

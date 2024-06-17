@@ -2,6 +2,7 @@ import os.path
 import textwrap
 
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
 import numpy as np
 import re
 
@@ -9,7 +10,15 @@ import calculate_mi as cm
 
 
 def make_bar(
-    fig, ax, values: list, labels: list, title: str, xlabel: str, ylabel: str, bottom=0.0, show_first=True
+    fig,
+    ax,
+    values: list,
+    labels: list,
+    title: str,
+    xlabel: str,
+    ylabel: str,
+    bottom=0.0,
+    show_first=True,
 ):
     return make_stacked_bars(
         fig,
@@ -42,7 +51,9 @@ def make_stacked_bars(
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.grid()
-    plt.setp(ax.get_xticklabels(), visible=False)  # don't show x labels to avoid overlap
+    plt.setp(
+        ax.get_xticklabels(), visible=False
+    )  # don't show x labels to avoid overlap
     plt_bars = []
     bottom = np.repeat(bottom, len(labels))
     for bar_values, category in zip(values, categories):
@@ -98,7 +109,9 @@ def make_stacked_bars(
             picked_bar = next(b for b in plt_bars if bar in b.patches)
             bar_index = picked_bar.index(bar)
             print(labels[bar_index])
-            plt_labels[bar_index].set_visible(True)  # show annotation for the selected bar
+            plt_labels[bar_index].set_visible(
+                True
+            )  # show annotation for the selected bar
             visible_labels.append(plt_labels[bar_index])
 
             fig.canvas.draw()
@@ -114,11 +127,10 @@ def add_statistics(values: list, ax: plt.Axes, loc="lower right"):
     l_max = ax.axhline(max_v, ls=":", color="red", label=f"max={max_v}")
     l_min = ax.axhline(min_v, ls="-", color="blue", label=f"min={min_v}")
 
-    legend = ax.legend(handles=[l_max, l_min], loc=loc, fontsize="small", framealpha=0.5)
+    legend = ax.legend(
+        handles=[l_max, l_min], loc=loc, fontsize="small", framealpha=0.5
+    )
     ax.add_artist(legend)
-
-
-import matplotlib.patches as mpatches
 
 
 def add_limits(limits: cm.Limits, values: list, ax: plt.Axes, loc="center right"):
@@ -129,7 +141,8 @@ def add_limits(limits: cm.Limits, values: list, ax: plt.Axes, loc="center right"
     )
     ax.set_facecolor("silver")
     ld = mpatches.Patch(
-        color="silver", label=f"dead [< {limits.bad.left}], [> {limits.bad.right}]: {stats.dead}"
+        color="silver",
+        label=f"dead [< {limits.bad.left}], [> {limits.bad.right}]: {stats.dead}",
     )
     lb = ax.axhspan(
         limits.bad.left,
@@ -153,7 +166,9 @@ def add_limits(limits: cm.Limits, values: list, ax: plt.Axes, loc="center right"
         label=f"good ({limits.good.left}, {limits.good.right}): {stats.good}",
     )
 
-    legend = ax.legend(handles=[lg, lt, lb, ld], loc=loc, fontsize="small", framealpha=0.5)
+    legend = ax.legend(
+        handles=[lg, lt, lb, ld], loc=loc, fontsize="small", framealpha=0.5
+    )
     ax.add_artist(legend)
 
 
@@ -206,7 +221,10 @@ def radon_cc_parser(data: dict):
 def radon_cc_preview(data: dict, save_output: str = None):
     complexities, cc_info = radon_cc_parser(data)
     fig, ax = plt.subplots(
-        num="Radon Cyclomatic Complexity Aggregate", figsize=(12, 3), frameon=True, layout="constrained"
+        num="Radon Cyclomatic Complexity Aggregate",
+        figsize=(12, 3),
+        frameon=True,
+        layout="constrained",
     )
     make_bar(
         fig,
@@ -327,7 +345,8 @@ def radon_hal_parser(data: dict, save_output: str = None):
         total_entry = data[filename]["total"]
         difficulties_files.append(total_entry["difficulty"])
         summaries_files.append(
-            f"filename: {filename}\n" + "\n".join([f"{key}: {value}" for key, value in total_entry.items()])
+            f"filename: {filename}\n"
+            + "\n".join([f"{key}: {value}" for key, value in total_entry.items()])
         )
         func_entries = data[filename]["functions"]
         for func_name in func_entries.keys():
@@ -342,7 +361,9 @@ def radon_hal_parser(data: dict, save_output: str = None):
     difficulties_files, summaries_files = sort(difficulties_files, summaries_files)
     difficulties_funcs, summaries_funcs = sort(difficulties_funcs, summaries_funcs)
 
-    fig = plt.figure(num="Radon Halstead Metric", figsize=(10, 8), frameon=True, layout="constrained")
+    fig = plt.figure(
+        num="Radon Halstead Metric", figsize=(10, 8), frameon=True, layout="constrained"
+    )
     ax1 = plt.subplot(2, 1, 1)
     make_bar(
         fig,
@@ -386,7 +407,9 @@ def radon_raw_aggregate_parser(data: dict):
 
     for filename in files:
         entity = data[filename]
-        label = f"filename: {filename}\n" + "\n".join([f"{key}: {value}" for key, value in entity.items()])
+        label = f"filename: {filename}\n" + "\n".join(
+            [f"{key}: {value}" for key, value in entity.items()]
+        )
         first_chart_values.append(tuple(entity[k] for k in first_chart_keys) + (label,))
 
     return sorted(first_chart_values, reverse=True)
@@ -394,10 +417,15 @@ def radon_raw_aggregate_parser(data: dict):
 
 def radon_raw_aggregate_preview(data: dict, save_output: str = None):
     first_chart_values = radon_raw_aggregate_parser(data)
-    loc, sloc, oneline_strings, multiline_strings, blank, first_chart_labels = zip(*first_chart_values)
+    loc, sloc, oneline_strings, multiline_strings, blank, first_chart_labels = zip(
+        *first_chart_values
+    )
 
     fig, ax = plt.subplots(
-        num="Radon Statistics Aggregate", figsize=(10, 5), frameon=True, layout="constrained"
+        num="Radon Statistics Aggregate",
+        figsize=(10, 5),
+        frameon=True,
+        layout="constrained",
     )
     bs = make_stacked_bars(
         fig,
@@ -434,7 +462,9 @@ def radon_raw_distinct_parser(data: dict):
     data_distinct = []
 
     for filename, entity in data.items():
-        label = f"filename: {filename}\n" + "\n".join([f"{key}: {value}" for key, value in entity.items()])
+        label = f"filename: {filename}\n" + "\n".join(
+            [f"{key}: {value}" for key, value in entity.items()]
+        )
         data_distinct.append(
             (
                 label,
@@ -450,12 +480,18 @@ def radon_raw_distinct_parser(data: dict):
 
 def radon_raw_distinct_preview(data: dict, save_output: str = None):
     data_distinct = radon_raw_distinct_parser(data)
-    sloc, sloc_labels = zip(*sorted([(e[1], e[0]) for e in data_distinct], reverse=True))
-    lloc, lloc_labels = zip(*sorted([(e[2], e[0]) for e in data_distinct], reverse=True))
+    sloc, sloc_labels = zip(
+        *sorted([(e[1], e[0]) for e in data_distinct], reverse=True)
+    )
+    lloc, lloc_labels = zip(
+        *sorted([(e[2], e[0]) for e in data_distinct], reverse=True)
+    )
     doc, doc_labels = zip(*sorted([(e[3] + e[4], e[0]) for e in data_distinct]))
     comments, comments_labels = zip(*sorted([(e[5], e[0]) for e in data_distinct]))
 
-    fig = plt.figure("Radon Statistics", figsize=(16, 8), frameon=True, layout="constrained")
+    fig = plt.figure(
+        "Radon Statistics", figsize=(16, 8), frameon=True, layout="constrained"
+    )
     ax1 = plt.subplot(2, 2, 1)
     make_bar(
         fig,
@@ -520,12 +556,17 @@ def radon_raw_parser(data: dict, save_output: str = None):
 
 
 def radon_mi_parser(data: dict, save_output: str = None):
-    descriptions, mi = zip(*[(f"file: {k}\nmi: {v['mi']}%", v["mi"]) for k, v in data.items()])
+    descriptions, mi = zip(
+        *[(f"file: {k}\nmi: {v['mi']}%", v["mi"]) for k, v in data.items()]
+    )
     inverted_mi = np.array(mi) - 100.0
 
     inverted_mi, descriptions = sort(inverted_mi, descriptions, reverse=False)
     fig, ax = plt.subplots(
-        num="Radon Maintainability Index", figsize=(10, 4), frameon=True, layout="constrained"
+        num="Radon Maintainability Index",
+        figsize=(10, 4),
+        frameon=True,
+        layout="constrained",
     )
     make_bar(
         fig,
@@ -539,7 +580,8 @@ def radon_mi_parser(data: dict, save_output: str = None):
     )
     add_statistics(mi, ax)
     plot_description = (
-        f"Total files count: {len(descriptions)}\n" f"MI≠100% in {np.count_nonzero(inverted_mi)} files"
+        f"Total files count: {len(descriptions)}\n"
+        f"MI≠100% in {np.count_nonzero(inverted_mi)} files"
     )
     make_plot_description(plot_description)
     save_or_show(save_output, "radon_MI.png")
@@ -553,7 +595,10 @@ def mm_cc_parser(data: dict, path: str, save_output: str = None):
     cc_values, cc_labels = sort(cc_values, cc_labels)
 
     fig, ax = plt.subplots(
-        num="Multimetric Cyclomatic Complexity", figsize=(12, 3), frameon=True, layout="constrained"
+        num="Multimetric Cyclomatic Complexity",
+        figsize=(12, 3),
+        frameon=True,
+        layout="constrained",
     )
     make_bar(
         fig,
@@ -572,7 +617,10 @@ def mm_cc_parser(data: dict, path: str, save_output: str = None):
 def mm_hal_parser(data: dict, path: str, save_output: str = None):
     hal_labels, hal_values = multimetric_parse_hal(data["files"], path)
     fig, ax = plt.subplots(
-        num="Multimetric Halstead Metric", figsize=(10, 5), frameon=True, layout="constrained"
+        num="Multimetric Halstead Metric",
+        figsize=(10, 5),
+        frameon=True,
+        layout="constrained",
     )
     make_bar(
         fig,
@@ -590,8 +638,12 @@ def mm_hal_parser(data: dict, path: str, save_output: str = None):
 
 def mm_raw_parser(data: dict, path: str, save_output: str = None):
     data = data["files"]
-    loc_labels, loc_values = multimetric_parse_metric("loc", "LOC", data, path, sort_order="descending")
-    fig = plt.figure("Multimetric Statistics", figsize=(10, 5), frameon=True, layout="constrained")
+    loc_labels, loc_values = multimetric_parse_metric(
+        "loc", "LOC", data, path, sort_order="descending"
+    )
+    fig = plt.figure(
+        "Multimetric Statistics", figsize=(10, 5), frameon=True, layout="constrained"
+    )
     ax = plt.subplot(2, 1, 1)
     make_bar(
         fig,
@@ -627,9 +679,14 @@ def mm_mi_parser(data: dict, path: str, save_output: str = None):
     mi_labels, mi_values = multimetric_parse_metric(
         "maintainability_index", "MI", data, path, sort_order="ascending"
     )
-    inverted_mi = np.array(mi_values) - 172.0  # if MI is maximum, show it on a graph with height 1
+    inverted_mi = (
+        np.array(mi_values) - 172.0
+    )  # if MI is maximum, show it on a graph with height 1
     fig, ax = plt.subplots(
-        num="Multimetric Maintainability Index", figsize=(10, 4), frameon=True, layout="constrained"
+        num="Multimetric Maintainability Index",
+        figsize=(10, 4),
+        frameon=True,
+        layout="constrained",
     )
     make_bar(
         fig,
@@ -664,7 +721,9 @@ def multimetric_parse_hal(data: dict, path: str) -> (list, list):
         if not entity:
             continue
         file = file.replace(path, "")
-        labels.append(f"file: {file}\n" + "\n".join([f"{k}:{entity[k]}" for k in hal_labels]))
+        labels.append(
+            f"file: {file}\n" + "\n".join([f"{k}:{entity[k]}" for k in hal_labels])
+        )
         values.append(entity[hal_difficulty_label])
 
     values, labels = sort(values, labels)
@@ -869,7 +928,9 @@ def flake8_parser(data: dict, code: str, specific_extract: callable, reverse=Tru
 
 
 def docstr_parser(text: str, path: str):
-    pattern = r'File: "(.*)"\n Needed: (.*); Found: (.*); Missing: (.*); Coverage: (.*)%'
+    pattern = (
+        r'File: "(.*)"\n Needed: (.*); Found: (.*); Missing: (.*); Coverage: (.*)%'
+    )
     data = []
     for match in re.findall(pattern, text):
         filename = match[0]
@@ -900,11 +961,17 @@ def docstr_preview(text: str, path: str, save_output: str = None):
     data, stats = docstr_parser(text, path)
     data1 = sorted(data, key=lambda e: e["missing"], reverse=True)
     data2 = sorted(data, key=lambda e: e["coverage"])
-    labels1, found, missing = zip(*[(e["label"], e["found"], e["missing"]) for e in data1])
+    labels1, found, missing = zip(
+        *[(e["label"], e["found"], e["missing"]) for e in data1]
+    )
     labels2, coverage = zip(*[(e["label"], e["coverage"]) for e in data2])
 
     fig, (ax1, ax2) = plt.subplots(
-        nrows=2, num="Docstring coverage", figsize=(10, 5), frameon=True, layout="constrained"
+        nrows=2,
+        num="Docstring coverage",
+        figsize=(10, 5),
+        frameon=True,
+        layout="constrained",
     )
     bs = make_stacked_bars(
         fig,
