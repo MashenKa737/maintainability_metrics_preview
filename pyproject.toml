@@ -1,0 +1,23 @@
+[tool.poetry]
+name = "maintainability-metrics-preview"
+version = "0.1.0"
+description = ""
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+matplotlib = "3.8.2"
+numpy = "1.26.4"
+radon = "6.0.1"
+pandas = ">=2.2.2,<2.3.0"
+flake8 = ">=7.0.0,<7.1.0"
+flake8-cognitive-complexity = "0.1.0"
+flake8-cohesion = "1.0.1"
+flake8-json = "23.7.0"
+docstr-coverage = ">=2.3.2,<2.4.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
