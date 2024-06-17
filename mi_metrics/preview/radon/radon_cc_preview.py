@@ -1,4 +1,4 @@
-from preview.results_preview import DataChart, SimpleDictParser, DataPreview
+from mi_metrics.preview.results_preview import DataChart, SimpleDictParser, DataPreview
 
 
 class RadonCCChart(DataChart):

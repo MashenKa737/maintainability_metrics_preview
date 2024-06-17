@@ -1,6 +1,6 @@
 import numpy as np
 
-from preview.results_preview import SimpleDictParser, DataPreview, DataChart
+from mi_metrics.preview.results_preview import SimpleDictParser, DataPreview, DataChart
 
 
 class RadonRawDistinctParser(SimpleDictParser):

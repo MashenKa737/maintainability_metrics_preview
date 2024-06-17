@@ -1,4 +1,4 @@
-from preview.results_preview import DataChart, DataPreview
+from mi_metrics.preview.results_preview import DataChart, DataPreview
 from .radon_cc_preview import RadonCCParser
 
 

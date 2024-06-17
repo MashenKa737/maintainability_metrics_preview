@@ -1,4 +1,4 @@
-from preview.results_preview import DictAggregateParser, DataChart, DataPreview
+from mi_metrics.preview.results_preview import DictAggregateParser, DataChart, DataPreview
 
 
 # Тоже по коду не используется
