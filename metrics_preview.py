@@ -44,16 +44,22 @@ def setup_arguments():
         help="Exclude files with path pattern from analysis",
         default=[],
     )
-    subparsers = parser.add_subparsers(dest="tool", required=True, help="tool to inspect")
+    subparsers = parser.add_subparsers(
+        dest="tool", required=True, help="tool to inspect"
+    )
     radon_name = "radon"
     radon_parser = subparsers.add_parser(radon_name)
     radon_commands = {"cc", "hal", "raw", "mi"}
-    radon_parser.add_argument("--commands", "-c", choices=radon_commands, nargs="+", default=radon_commands)
+    radon_parser.add_argument(
+        "--commands", "-c", choices=radon_commands, nargs="+", default=radon_commands
+    )
 
     mm_name = "multimetric"
     mm_parser = subparsers.add_parser(mm_name)
     mm_commands = {"cc", "hal", "raw", "mi"}
-    mm_parser.add_argument("--commands", "-c", choices=mm_commands, nargs="+", default=mm_commands)
+    mm_parser.add_argument(
+        "--commands", "-c", choices=mm_commands, nargs="+", default=mm_commands
+    )
 
     flake8_name = "flake8"
     flake8_parser = subparsers.add_parser(flake8_name)
@@ -62,22 +68,30 @@ def setup_arguments():
         "--commands", "-c", choices=flake8_commands, nargs="+", default=flake8_commands
     )
 
-    docstr_name = "docstr-coverage"
-    docstr_parser = subparsers.add_parser(docstr_name)
+    # docstr_name = "docstr-coverage"
+
+    # TODO: Не используется!? Точно надо?
+    # docstr_parser = subparsers.add_parser(docstr_name)
 
     final_name = "final"
     final_parser = subparsers.add_parser(final_name)
     final_commands = {"mi", "loc", "cc", "cog", "coh", "doc"}
-    final_parser.add_argument("--commands", "-c", choices=final_commands, nargs="+", default=final_commands)
+    final_parser.add_argument(
+        "--commands", "-c", choices=final_commands, nargs="+", default=final_commands
+    )
 
     score_name = "mi_score"
     mi_score_parser = subparsers.add_parser(score_name)
-    mi_score_parser.add_argument("threshold", type=float, help="Minimum allowed mi_score to fail under")
+    mi_score_parser.add_argument(
+        "threshold", type=float, help="Minimum allowed mi_score to fail under"
+    )
 
     p_args = parser.parse_args()
 
     current_path = os.path.abspath(os.getcwd())
-    p_args.output_folder = os.path.abspath(p_args.output_folder) if p_args.output_folder else current_path
+    p_args.output_folder = (
+        os.path.abspath(p_args.output_folder) if p_args.output_folder else current_path
+    )
     if p_args.project_name:
         p_args.output_folder = os.path.join(p_args.output_folder, p_args.project_name)
     if not os.path.exists(p_args.output_folder):
@@ -105,7 +119,9 @@ def radon_out_file(command: str, output_folder: str):
     return os.path.join(output_folder, f"radon_{command}_results.json")
 
 
-def get_radon_results(commands: list, project_path: str, output_folder: str, exclude: list):
+def get_radon_results(
+    commands: list, project_path: str, output_folder: str, exclude: list
+):
     i_f_args = ["-e", ",".join(exclude)] if exclude else []
     # print(i_f_args)
     for command in commands:
@@ -126,7 +142,9 @@ def get_radon_results(commands: list, project_path: str, output_folder: str, exc
     print("radon results done")
 
 
-def parse_radon_results(commands, output_folder, save, raw_distinct=None, cc_charts=["func", "class"]):
+def parse_radon_results(
+    commands, output_folder, save, raw_distinct=None, cc_charts=["func", "class"]
+):
     radon_raw_parser = rp.radon_raw_parser
     if raw_distinct is not None:
         if raw_distinct:
@@ -162,7 +180,9 @@ def get_and_parse_radon_results(args):
     radon_commands = args.commands
     if not args.use_cache:
         get_radon_results(radon_commands, args.path, args.output_folder, args.exclude)
-    parse_radon_results(commands=radon_commands, save=args.save, output_folder=args.output_folder)
+    parse_radon_results(
+        commands=radon_commands, save=args.save, output_folder=args.output_folder
+    )
 
 
 def get_and_parse_multimetric_results(args):
@@ -173,11 +193,15 @@ def get_and_parse_multimetric_results(args):
 def get_multimetric_results(path: str, output_folder: str):
     source_files = []
     for root, dirs, files in os.walk(path):
-        source_files.extend([os.path.join(root, file) for file in files if file.endswith(".py")])
+        source_files.extend(
+            [os.path.join(root, file) for file in files if file.endswith(".py")]
+        )
     out = os.path.join(output_folder, "multimetric.json")
     err = os.path.join(output_folder, "mm_err.txt")
     with open(out, "w") as out, open(err, "w") as err:
-        subprocess.Popen(["multimetric", *source_files], stdout=out, stderr=err).communicate()
+        subprocess.Popen(
+            ["multimetric", *source_files], stdout=out, stderr=err
+        ).communicate()
 
 
 def parse_multimetric_results(args):
@@ -191,7 +215,9 @@ def parse_multimetric_results(args):
     data = read_dict(result_file)
     for command in args.commands:
         mm_parsers[command](
-            data, path=os.path.abspath(args.path), save_output=args.output_folder if args.save else None
+            data,
+            path=os.path.abspath(args.path),
+            save_output=args.output_folder if args.save else None,
         )
         print(f"multimetric {command} charts done")
 
@@ -221,7 +247,12 @@ def parse_flake8_results(commands, output_folder, save):
 
 
 def get_flake8_results(commands, path: str, out: str, exclude: list):
-    codes = {"radon": "R701", "mccabe": "C901", "cognitive": "CCR001", "cohesion": "H601"}
+    codes = {
+        "radon": "R701",
+        "mccabe": "C901",
+        "cognitive": "CCR001",
+        "cohesion": "H601",
+    }
     arguments = {
         "radon": ["--radon-max-cc", "0"],
         "mccabe": ["--max-complexity", "0"],
@@ -256,14 +287,18 @@ def get_docstr_results(project_path: str, out: str, exclude: list):
     i_f_args = ["--exclude=" + ",".join(exclude)] if exclude else []
     with open(out, "w") as out:
         subprocess.Popen(
-            ["docstr-coverage"] + i_f_args + [project_path, "-v", "2"], stdout=out, stderr=out
+            ["docstr-coverage"] + i_f_args + [project_path, "-v", "2"],
+            stdout=out,
+            stderr=out,
         ).communicate()
     print("docstr-coverage results done")
 
 
 def parse_docstr_results(path, save, output_folder):
     text = read_text(docstr_file_path(output_folder))
-    rp.docstr_preview(text, path=os.path.abspath(path), save_output=output_folder if save else None)
+    rp.docstr_preview(
+        text, path=os.path.abspath(path), save_output=output_folder if save else None
+    )
     print("docstring charts done")
 
 
@@ -304,17 +339,25 @@ def parse_final_results(args):
         )
     if len(flake8_commands) != 0:
         args.commands = flake8_commands
-        parse_flake8_results(commands=flake8_commands, output_folder=args.output_folder, save=args.save)
+        parse_flake8_results(
+            commands=flake8_commands, output_folder=args.output_folder, save=args.save
+        )
     if len(docstr_commands) != 0:
         args.commands = []
-        parse_docstr_results(path=args.path, save=args.save, output_folder=args.output_folder)
+        parse_docstr_results(
+            path=args.path, save=args.save, output_folder=args.output_folder
+        )
 
 
-def get_final_results(radon_commands, flake8_commands, docstr_commands, path, output_folder, exclude):
+def get_final_results(
+    radon_commands, flake8_commands, docstr_commands, path, output_folder, exclude
+):
     if len(radon_commands) != 0:
         get_radon_results(radon_commands, path, output_folder, exclude)
     if len(flake8_commands) != 0:
-        get_flake8_results(flake8_commands, path, flake8_out_file(output_folder), exclude)
+        get_flake8_results(
+            flake8_commands, path, flake8_out_file(output_folder), exclude
+        )
     if len(docstr_commands) != 0:
         get_docstr_results(path, docstr_file_path(output_folder), exclude)
 
@@ -324,7 +367,9 @@ def get_and_parse_final_results_with_mi(args, score_only):
 
     ignore_commands = score_only or ("mi" in commands)
     r_c = (
-        radon_final_commands.values() if ignore_commands else choose_commands(radon_final_commands, commands)
+        radon_final_commands.values()
+        if ignore_commands
+        else choose_commands(radon_final_commands, commands)
     )
     f_c = (
         flake8_final_commands.values()
@@ -340,10 +385,18 @@ def get_and_parse_final_results_with_mi(args, score_only):
     if not args.use_cache:
         get_final_results(r_c, f_c, d_c, args.path, args.output_folder, args.exclude)
 
-    cc_data = read_dict(radon_out_file("cc", args.output_folder)) if "cc" in r_c else dict()
-    raw_data = read_dict(radon_out_file("raw", args.output_folder)) if "raw" in r_c else dict()
-    flake8_data = read_dict(flake8_out_file(args.output_folder)) if len(f_c) != 0 else dict()
-    docstrings_data = read_text(docstr_file_path(args.output_folder)) if len(d_c) != 0 else ""
+    cc_data = (
+        read_dict(radon_out_file("cc", args.output_folder)) if "cc" in r_c else dict()
+    )
+    raw_data = (
+        read_dict(radon_out_file("raw", args.output_folder)) if "raw" in r_c else dict()
+    )
+    flake8_data = (
+        read_dict(flake8_out_file(args.output_folder)) if len(f_c) != 0 else dict()
+    )
+    docstrings_data = (
+        read_text(docstr_file_path(args.output_folder)) if len(d_c) != 0 else ""
+    )
 
     data = (cc_data, raw_data, flake8_data, docstrings_data, os.path.abspath(args.path))
 

@@ -47,7 +47,9 @@ def _make_stacked_bars(
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.grid()
-    plt.setp(ax.get_xticklabels(), visible=False)  # don't show x labels to avoid overlap
+    plt.setp(
+        ax.get_xticklabels(), visible=False
+    )  # don't show x labels to avoid overlap
     plt_bars = []
     bottom = np.repeat(bottom, len(labels))
     for category, bar_values in values:
@@ -103,7 +105,9 @@ def _make_stacked_bars(
             picked_bar = next(b for b in plt_bars if bar in b.patches)
             bar_index = picked_bar.index(bar)
             print(labels[bar_index])
-            plt_labels[bar_index].set_visible(True)  # show annotation for the selected bar
+            plt_labels[bar_index].set_visible(
+                True
+            )  # show annotation for the selected bar
             visible_labels.append(plt_labels[bar_index])
 
             fig.canvas.draw()
@@ -119,7 +123,9 @@ def _add_statistics(values: Sequence, ax: plt.Axes, loc="upper right"):
     l_max = ax.axhline(max_v, ls=":", color="red", label=f"max={max_v}")
     l_min = ax.axhline(min_v, ls="-", color="blue", label=f"min={min_v}")
 
-    legend = ax.legend(handles=[l_max, l_min], loc=loc, fontsize="small", framealpha=0.5)
+    legend = ax.legend(
+        handles=[l_max, l_min], loc=loc, fontsize="small", framealpha=0.5
+    )
     ax.add_artist(legend)
 
 
@@ -176,7 +182,12 @@ class DataChart:
         return bs
 
     def make_bar(
-        self, fig: plt.Figure, ax: plt.Axes, values: Sequence, labels: Sequence[str], bottom: float = 0.0
+        self,
+        fig: plt.Figure,
+        ax: plt.Axes,
+        values: Sequence,
+        labels: Sequence[str],
+        bottom: float = 0.0,
     ):
         return _make_bar(
             fig,
@@ -249,7 +260,9 @@ class DataPreview(ABC):
 
 
 class SimpleDictParser(ABSParser):
-    def __init__(self, label: callable, value: callable, include: callable, reversed: bool = True):
+    def __init__(
+        self, label: callable, value: callable, include: callable, reversed: bool = True
+    ):
         self._label = label
         self._value = value
         self._include = include
@@ -258,7 +271,11 @@ class SimpleDictParser(ABSParser):
     def parse(self, data):
         values, labels = zip(
             *sorted(
-                [(self._value(*kv), self._label(*kv)) for kv in data.items() if self._include(*kv)],
+                [
+                    (self._value(*kv), self._label(*kv))
+                    for kv in data.items()
+                    if self._include(*kv)
+                ],
                 reverse=self._reversed,
             )
         )
@@ -283,7 +300,11 @@ class DictAggregateParser(ABSParser):
     def parse(self, data):
         values, labels = zip(
             *sorted(
-                [(self._value(*kv), self._label(*kv)) for kv in data.items() if self._include(*kv)],
+                [
+                    (self._value(*kv), self._label(*kv))
+                    for kv in data.items()
+                    if self._include(*kv)
+                ],
                 key=lambda vl: vl[0][self._categories[0]],
                 reverse=self._reverse,
             ),

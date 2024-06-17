@@ -1,9 +1,19 @@
-from preview.results_preview import DictAggregateParser, SimpleDictParser, DataChart, DataPreview
+from preview.results_preview import DictAggregateParser, DataChart, DataPreview
+
+
+# Тоже по коду не используется
+# from preview.results_preview import SimpleDictParser
 
 
 class RadonRawAggregateParser(DictAggregateParser):
     def __init__(self):
-        categories = ["LOC", "SLOC", "Oneline comments and docstrings", "Multiline docstrings", "Blank"]
+        categories = [
+            "LOC",
+            "SLOC",
+            "Oneline comments and docstrings",
+            "Multiline docstrings",
+            "Blank",
+        ]
 
         def label(f, e):
             return f"filename: {f}\n" + "\n".join([f"{k}: {v}" for k, v in e.items()])
@@ -54,6 +64,6 @@ class RadonRawAggregatePreview(DataPreview):
             0,
             f"Total files count: {len(labels)}\n"
             + f"LOC: {sum(loc)}\n"
-            + "\n".join([f"{k}: {sum(v)}" for k, v in values])
+            + "\n".join([f"{k}: {sum(v)}" for k, v in values]),
         )
         self.save_or_show(save, output_folder)

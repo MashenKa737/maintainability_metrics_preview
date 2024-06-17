@@ -3,7 +3,9 @@ from preview.results_preview import DataChart, SimpleDictParser, DataPreview
 
 class RadonCCChart(DataChart):
     def __init__(self):
-        super().__init__(title="Radon Cyclomatic Complexity", xlabel="blocks", ylabel="points")
+        super().__init__(
+            title="Radon Cyclomatic Complexity", xlabel="blocks", ylabel="points"
+        )
 
 
 class RadonCCParser(SimpleDictParser):

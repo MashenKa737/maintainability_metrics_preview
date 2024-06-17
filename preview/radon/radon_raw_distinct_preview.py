@@ -46,7 +46,9 @@ class RadonRawDistinctPreview(DataPreview):
                     xlabel=xlabel,
                     ylabel=ylabel,
                 ),
-                RadonRawDistinctParser(lambda _, e: e["single_comments"] + e["multi"], reverse=False),
+                RadonRawDistinctParser(
+                    lambda _, e: e["single_comments"] + e["multi"], reverse=False
+                ),
             ),
         ]
         super().__init__(
@@ -64,6 +66,8 @@ class RadonRawDistinctPreview(DataPreview):
             values, labels = parser.parse(data)
             self.make_chart(index, values=values, labels=labels, bottom=-1)
             self.add_statistics(index, values)
-            self.make_chart_description(index, f"{self._chart_labels[index]} total: {np.sum(values)}")
+            self.make_chart_description(
+                index, f"{self._chart_labels[index]} total: {np.sum(values)}"
+            )
 
         self.save_or_show(save, output_folder)
